@@ -1,5 +1,6 @@
 import { PoolConnection, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 import { query, withTransaction } from './Database.js';
+import { USER_REFERENCES } from './userReferences.js';
 
 export interface User {
     id: number;
@@ -50,6 +51,7 @@ const userFromRow = (row: RowDataPacket): User => ({
 export const userDisplayName = (user: User): string =>
     user.name || user.username || user.discord_name || user.discord_username || String(user.id);
 
+
 class UserDAO {
     fromTelegram(from: TelegramIdentity): Promise<User> {
         return withTransaction(conn => this.fromTelegramWith(conn, from));
@@ -99,6 +101,51 @@ class UserDAO {
             { discord_username }
         );
         return rows.length > 0 ? userFromRow(rows[0]) : undefined;
+    }
+
+    // Merges the Discord account's own row (if it spoke before being linked) into the user's; on
+    // duplicates the user's row wins.
+    linkDiscord(user_id: number, discord: DiscordIdentity): Promise<User> {
+        return withTransaction(async conn => {
+            const [existingRows] = await conn.query<RowDataPacket[]>(
+                `SELECT ${USER_COLUMNS} FROM user WHERE discord_id = :discord_id`,
+                { discord_id: discord.id }
+            );
+            const existing: User | undefined = existingRows.length > 0 ? userFromRow(existingRows[0]) : undefined;
+            if (existing && existing.id !== user_id) {
+                const [keptRows] = await conn.query<RowDataPacket[]>(`SELECT ${USER_COLUMNS} FROM user WHERE id = :id`, { id: user_id });
+                const keptName: string = userDisplayName(userFromRow(keptRows[0]));
+                await Promise.all(USER_REFERENCES.map(async ref => {
+                    if (ref.duplicateKey) {
+                        const same: string = ['1 = 1', ...ref.duplicateKey.map(k => `b.${k} = a.${k}`)].join(' AND ');
+                        await conn.query(
+                            `DELETE a FROM ${ref.table} a JOIN ${ref.table} b ON ${same} ` +
+                            `WHERE a.${ref.column} = :from_id AND b.${ref.column} = :to_id`,
+                            { from_id: existing.id, to_id: user_id }
+                        );
+                    }
+                    const rename: string = ref.nameColumn ? `, ${ref.nameColumn} = :name` : '';
+                    await conn.query(
+                        `UPDATE ${ref.table} SET ${ref.column} = :to_id${rename} WHERE ${ref.column} = :from_id`,
+                        { from_id: existing.id, to_id: user_id, name: keptName }
+                    );
+                }));
+                await conn.query('DELETE FROM user WHERE id = :id', { id: existing.id });
+            }
+            await conn.query(
+                'UPDATE user SET discord_id = :discord_id, discord_name = :discord_name, discord_username = :discord_username WHERE id = :id',
+                { id: user_id, discord_id: discord.id, discord_name: discord.global_name || existing?.discord_name || null, discord_username: discord.username }
+            );
+            const [rows] = await conn.query<RowDataPacket[]>(`SELECT ${USER_COLUMNS} FROM user WHERE id = :id`, { id: user_id });
+            return userFromRow(rows[0]);
+        });
+    }
+
+    unlinkDiscord(user_id: number): Promise<void> {
+        return query<ResultSetHeader>(
+            'UPDATE user SET discord_id = NULL, discord_name = NULL, discord_username = NULL WHERE id = :id',
+            { id: user_id }
+        ).then(() => undefined);
     }
 
     async getUser(id: number): Promise<User | undefined> {
