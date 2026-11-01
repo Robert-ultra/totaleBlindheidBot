@@ -33,7 +33,7 @@ export interface Webhook {
 
 // Discord webhook names (and the per-message username override) may not contain these.
 const sanitizeWebhookName = (name: string): string =>
-    name.replace(/discord/gi, 'disc0rd').replace(/clyde/gi, 'c1yde').slice(0, 80) || 'someone';
+    name.replace(/discord/gi, 'didi').replace(/clyde/gi, 'dada').slice(0, 80) || 'someone';
 
 class DiscordService {
     public static instance: DiscordService | null = null;

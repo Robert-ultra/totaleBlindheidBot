@@ -31,3 +31,8 @@ Feature: relaying messages between a Telegram group and its Discord channels
     And Discord channel "80041" is linked to the chat
     When the user sends "no webhooks here"
     Then Discord channel "80041" receives "no webhooks here" posted by the bot as "Tester"
+
+  Scenario: names Discord forbids in webhook usernames are altered
+    Given a user with id 8102 and first name "Clyde of Discord"
+    When the user sends "it's me"
+    Then Discord channel "80011" receives "it's me" from "dada of didi"
