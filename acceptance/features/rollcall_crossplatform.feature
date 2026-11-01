@@ -75,3 +75,21 @@ Feature: rollcalls and wingman calls across Telegram and Discord
       | Be my wingman yo!                         |
       | Let's score some!                         |
       | I'm a single pringle and ready to mingle! |
+
+  Scenario: a linked person's RSVPs from both platforms count once
+    Given the user is an admin of the chat
+    When user 11006 sends "/hi"
+    Then the bot replies "Hello to you too, User11006!"
+    When the user sends "/rollcall"
+    Then the bot reply contains "🙋‍♂️ Captain"
+    When the latest bot message is remembered
+    And the latest bot message in Discord channel "100011" is remembered
+    And Discord user "finn_cs" named "Finn" with id "100010000000000006" taps "rsvp:maybe" on the remembered Discord message
+    Then the remembered message is edited to contain "🤷‍♂️ Finn"
+    When user 11006 named "User11006" taps no
+    Then the remembered message is edited to contain "🙅‍♂️ User11006"
+    When the user sends "/link_user @user11006 discord:finn_cs"
+    Then the bot replies "Linked User11006 to Discord user finn_cs."
+    When Discord user "finn_cs" named "Finn" with id "100010000000000006" taps "rsvp:yes" on the remembered Discord message
+    Then the remembered message is edited to contain "🙋‍♂️ Captain User11006" and not "Finn"
+    And the remembered Discord message is edited to contain "🙋‍♂️ Captain User11006"

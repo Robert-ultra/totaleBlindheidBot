@@ -98,6 +98,15 @@ def step_remembered_edited_to_contain(context: Context, expected: str) -> None:
     _wait_for_remembered_edit(context, lambda text: expected in text, f"to contain {expected!r}")
 
 
+@then('the remembered message is edited to contain "(?P<expected>[^"]*)" and not "(?P<unexpected>[^"]*)"')
+def step_remembered_edited_to_contain_and_not(context: Context, expected: str, unexpected: str) -> None:
+    _wait_for_remembered_edit(
+        context,
+        lambda text: expected in text and unexpected not in text,
+        f"to contain {expected!r} and not {unexpected!r}"
+    )
+
+
 @then('the remembered message is edited to contain "(?P<expected>[^"]*)" without a presence marker')
 def step_remembered_edited_without_markers(context: Context, expected: str) -> None:
     _wait_for_remembered_edit(
