@@ -186,3 +186,34 @@ Feature: linking Telegram and Discord users
     When the user sends "/steam_user_id"
     Then the bot reply starts with "Whose Steam ID(s) do you want to set?"
     And the bot reply offers the buttons "Admin (@admin)", "User9121 (@user9121)"
+
+  Scenario: a rotation holding both halves of a linked person keeps one spot
+    Given a chat with id 9012
+    And a user with id 9999 and first name "Admin"
+    And the user is an admin of the chat
+    And a Discord server "9012" named "Server" with channel "90121" named "general" and member "ivy" named "Ivy" with id "901200000000000001"
+    And Discord channel "90121" is linked to the chat
+    When user 9122 sends "/hi"
+    Then the bot replies "Hello to you too, User9122!"
+    When the user sends "/rollcall_add_player discord:ivy"
+    Then the bot replies "Added 1 players to rollcall."
+    When the user sends "/rollcall_add_player User9122" mentioning user 9122 as "User9122"
+    Then the bot replies "Added 1 players to rollcall."
+    When the user sends "/rollcall_get_players"
+    Then the bot replies:
+      """
+      Players in rollcall:
+      - Ivy
+      - User9122
+      """
+    When the user sends "/link_user @user9122 discord:ivy"
+    Then the bot replies "Linked User9122 to Discord user ivy."
+    When the user sends "/rollcall_get_players"
+    Then the bot replies:
+      """
+      Players in rollcall:
+      - User9122
+      """
+    When the user sends "/rollcall"
+    Then the bot reply contains "User9122"
+    And the bot reply does not contain "Ivy"
