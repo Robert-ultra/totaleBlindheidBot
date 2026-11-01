@@ -65,3 +65,19 @@ Feature: scheduling rollcalls across Telegram and Discord
     And Discord channel "101011" receives a bot message containing "🙋‍♂️ Captain Bob" with buttons "Joining, Maybe/Later, No"
     And Discord channel "101021" receives a bot message containing "🙋‍♂️ Captain Bob" with buttons "Joining, Maybe/Later, No"
     And the remembered Discord message is edited to contain "Rollcall scheduled for" without buttons
+
+  Scenario: a scheduler linked after scheduling is named by Telegram when the rollcall fires
+    Given the user is an admin of the chat
+    When user 11102 sends "/hi"
+    Then the bot replies "Hello to you too, User11102!"
+    When Discord user "gwen_cs" named "Gwen" with id "101010000000000007" runs "/schedule" with time "3 hours" in channel "101011"
+    Then the bot reply starts with "Rollcall scheduled for"
+    And the bot reply contains "🙋‍♂️ Gwen"
+    When the latest bot message is remembered
+    And the user sends "/link_user @user11102 discord:gwen_cs"
+    Then the bot replies "Linked User11102 to Discord user gwen_cs."
+    When the scheduled rollcall's time has come
+    Then the bot reply offers a "Joining" button
+    And the bot reply contains "🙋‍♂️ User11102"
+    And the bot reply does not contain "Gwen"
+    And Discord channel "101011" receives a bot message containing "🙋‍♂️ User11102" with buttons "Joining, Maybe/Later, No"
