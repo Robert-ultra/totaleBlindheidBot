@@ -92,3 +92,80 @@ Feature: linking Telegram and Discord users
     And Discord channel "90081" is linked to the chat
     When the user sends "/steam_user_id discord:erin 76561198000009008"
     Then the bot replies "Steam user ID(s) for Erin has been set to 76561198000009008"
+
+  Scenario: a Discord-only player's Steam ids and game history follow them when linked
+    Given a chat with id 9009
+    And a user with id 9999 and first name "Admin"
+    And the user is an admin of the chat
+    And a Discord server "9009" named "Server" with channel "90091" named "general" and member "fay" named "Fay" with id "900900000000000001"
+    And Discord channel "90091" is linked to the chat
+    When Discord user "fay" named "Fay" with id "900900000000000001" says "gg" in channel "90091"
+    Then the bot replies "Fay: gg"
+    When the user sends "/steam_user_id discord:fay 76561198000009009"
+    Then the bot replies "Steam user ID(s) for Fay has been set to 76561198000009009"
+    When Steam mappings are refreshed
+    And Steam reports user "76561198000009009" playing CS2 with score "5-3" on map "Inferno"
+    And Steam reports user "76561198000009009" stopped playing
+    Then chat 9009 eventually receives a new Steam message "🏆 Gamer won a game on Inferno (Competitive): 5️⃣-3️⃣"
+    When user 9119 sends "/hi"
+    Then the bot replies "Hello to you too, User9119!"
+    When the user sends "/link_user @user9119 discord:fay"
+    Then the bot replies "Linked User9119 to Discord user fay."
+    When user 9119 sends "/game_history"
+    Then the bot replies "🏆 Inferno · Competitive · 5-3"
+    When Steam mappings are refreshed
+    And Steam reports user "76561198000009009" playing CS2 with score "8-3" on map "Inferno"
+    And Steam reports user "76561198000009009" stopped playing
+    Then chat 9009 eventually receives a new Steam message "🏆 Gamer won a game on Inferno (Competitive): 8️⃣-3️⃣"
+    When user 9119 sends "/game_history"
+    Then the bot replies:
+      """
+      🏆 Inferno · Competitive · 5-3
+      🏆 Inferno · Competitive · 8-3
+      """
+    When the user sends "/unlink_user @user9119"
+    Then the bot replies "Unlinked User9119 from Discord user fay."
+    When user 9119 sends "/game_history"
+    Then the bot replies:
+      """
+      🏆 Inferno · Competitive · 5-3
+      🏆 Inferno · Competitive · 8-3
+      """
+
+  Scenario: a Steam id both accounts registered is kept once
+    Given a chat with id 9010
+    And a user with id 9999 and first name "Admin"
+    And the user is an admin of the chat
+    And a Discord server "9010" named "Server" with channel "90101" named "general" and member "gus" named "Gus" with id "901000000000000001"
+    And Discord channel "90101" is linked to the chat
+    When user 9120 sends "/steam_user_id 76561198000009010"
+    Then the bot replies "Your Steam user ID(s) has been set to 76561198000009010"
+    When the user sends "/steam_user_id discord:gus 76561198000009010"
+    Then the bot replies "Steam user ID(s) for Gus has been set to 76561198000009010"
+    When the user sends "/link_user @user9120 discord:gus"
+    Then the bot replies "Linked User9120 to Discord user gus."
+    When Steam mappings are refreshed
+    And Steam reports user "76561198000009010" playing CS2 with score "9-3" on map "Vertigo"
+    And Steam reports user "76561198000009010" stopped playing
+    Then chat 9010 eventually receives a new Steam message "🏆 Gamer won a game on Vertigo (Competitive): 9️⃣-3️⃣"
+    When user 9120 sends "/game_history"
+    Then the bot replies "🏆 Vertigo · Competitive · 9-3"
+
+  Scenario: the chat roster lists a linked person once, under their Telegram name
+    Given a chat with id 9011
+    And a user with id 9999 and first name "Admin"
+    And the user is an admin of the chat
+    And a Discord server "9011" named "Server" with channel "90111" named "general"
+    And Discord channel "90111" is linked to the chat
+    When Discord user "hal_cs" named "Hal" with id "901100000000000001" says "hey" in channel "90111"
+    Then the bot replies "Hal: hey"
+    When user 9121 sends "/hi"
+    Then the bot replies "Hello to you too, User9121!"
+    When the user sends "/steam_user_id"
+    Then the bot reply starts with "Whose Steam ID(s) do you want to set?"
+    And the bot reply offers the buttons "Admin (@admin)", "Hal", "User9121 (@user9121)"
+    When the user sends "/link_user @user9121 discord:hal_cs"
+    Then the bot replies "Linked User9121 to Discord user hal_cs."
+    When the user sends "/steam_user_id"
+    Then the bot reply starts with "Whose Steam ID(s) do you want to set?"
+    And the bot reply offers the buttons "Admin (@admin)", "User9121 (@user9121)"

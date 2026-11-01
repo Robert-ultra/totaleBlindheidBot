@@ -4,6 +4,7 @@ These use behave's regex matcher (which anchors patterns at both ends) so the
 generic "the user sends ..." step does not greedily swallow the more specific
 mention variants.
 """
+import re
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -154,6 +155,12 @@ def step_reply_equals(context: Context, expected: str) -> None:
     assert reply == expected, f"Expected reply {expected!r} but got {reply!r}"
 
 
+@then('the bot replies')
+def step_reply_equals_text(context: Context) -> None:
+    reply: str = _latest_reply(context)
+    assert reply == context.text, f"Expected reply {context.text!r} but got {reply!r}"
+
+
 @then('the bot reply contains "(?P<expected>[^"]*)"')
 def step_reply_contains(context: Context, expected: str) -> None:
     reply: str = _latest_reply(context)
@@ -216,6 +223,13 @@ def step_reply_offers_button(context: Context, label: str) -> None:
     message: Dict[str, Any] = _latest_message(context)
     labels: List[Optional[str]] = helpers.button_labels(message)
     assert label in labels, f"Expected a {label!r} button, got {labels}"
+
+
+@then('the bot reply offers the buttons (?P<labels>.+)')
+def step_reply_offers_buttons(context: Context, labels: str) -> None:
+    expected: List[str] = re.findall(r'"([^"]*)"', labels)
+    actual: List[Optional[str]] = helpers.button_labels(_latest_message(context))
+    assert actual == expected, f"Expected buttons {expected!r}, got {actual!r}"
 
 
 @then('the bot reply offers a (?P<style>success|primary|danger) "(?P<label>[^"]*)" button')
