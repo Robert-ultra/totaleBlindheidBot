@@ -449,3 +449,57 @@ def step_bot_sends_media(context: Context, kind: str, name: str, caption: str) -
     new: List[Dict[str, Any]] = _new_messages(context)
     hits = [m for m in new if m["method"] == method and m.get("file", {}).get("filename") == name and m["text"] == caption]
     assert hits, f"Expected a {method} of {name!r} with caption {caption!r}, got {[(m['method'], m.get('file'), m['text']) for m in new]}"
+
+
+def _reacted_message(context: Context, which: str) -> int:
+    return context.remembered_message_id if which == "the remembered message" else context.last_sent_message_id
+
+
+def _react(context: Context, user_id: str, message_id: int, new: List[Dict[str, Any]]) -> None:
+    reactions: Dict[Tuple[str, int], List[Dict[str, Any]]] = getattr(context, "telegram_reactions", {})
+    context.cmd_baseline = len(helpers.get_outbox(context.chat_id))
+    helpers.inject_reaction(context.chat_id, message_id, int(user_id), reactions.get((user_id, message_id), []), new)
+    context.telegram_reactions = {**reactions, (user_id, message_id): new}
+
+
+@when('user (?P<user_id>\\d+) reacts to (?P<which>that message|the remembered message) with "(?P<emoji>[^"]*)"')
+def step_user_reacts(context: Context, user_id: str, which: str, emoji: str) -> None:
+    _react(context, user_id, _reacted_message(context, which), [{"type": "emoji", "emoji": e} for e in emoji.split()])
+
+
+@when('user (?P<user_id>\\d+) reacts to (?P<which>that message|the remembered message) with a custom emoji')
+def step_user_reacts_custom(context: Context, user_id: str, which: str) -> None:
+    _react(context, user_id, _reacted_message(context, which), [{"type": "custom_emoji", "custom_emoji_id": "5368324170671202286"}])
+
+
+@when('user (?P<user_id>\\d+) takes back their reaction to (?P<which>that message|the remembered message)')
+def step_user_unreacts(context: Context, user_id: str, which: str) -> None:
+    _react(context, user_id, _reacted_message(context, which), [])
+
+
+def _bot_reactions(context: Context, message_id: int) -> List[str]:
+    return [m["text"] for m in helpers.get_outbox(context.chat_id)[context.cmd_baseline:]
+            if m["method"] == "setMessageReaction" and m["message_id"] == message_id]
+
+
+@then('the bot reacts to (?P<which>that message|the remembered message) with "(?P<emoji>[^"]*)"')
+def step_bot_reacts(context: Context, which: str, emoji: str) -> None:
+    message_id: int = _reacted_message(context, which)
+    deadline: float = time.time() + helpers.REPLY_TIMEOUT
+    while time.time() < deadline:
+        if _bot_reactions(context, message_id)[-1:] == [emoji]:
+            return
+        time.sleep(helpers.POLL_INTERVAL)
+    raise AssertionError(f"Expected the bot to react to message {message_id} with {emoji!r}; it set {_bot_reactions(context, message_id)}")
+
+
+@then('the bot takes back its reaction to (?P<which>that message|the remembered message)')
+def step_bot_unreacts(context: Context, which: str) -> None:
+    step_bot_reacts(context, which, "")
+
+
+@then('the bot does not react on Telegram')
+def step_bot_no_telegram_reaction(context: Context) -> None:
+    time.sleep(3)
+    reactions: List[Dict[str, Any]] = [m for m in helpers.get_outbox(context.chat_id)[context.cmd_baseline:] if m["method"] == "setMessageReaction"]
+    assert not reactions, f"Expected no reactions in chat {context.chat_id}, got {reactions}"

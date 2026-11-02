@@ -16,6 +16,7 @@ import { toDiscordMarkdown } from './discord/markdown.js';
 import ChatLinkDAO, { ChatLink } from './dao/ChatLinkDAO.js';
 import { asFormatted, Part } from './format.js';
 import { recordDiscordSender, relayDiscordDeletion, relayDiscordEdit, relayFromDiscord, relayFromTelegram, relayTelegramEdit } from './relay.js';
+import ReactionMirror, { ReactionChange, telegramReactionChange } from './reactions.js';
 import { executeRollcall } from './command/rollcall.js';
 import MessageRouter, { ExtendedMessage } from './MessageRouter.js';
 import { Rsvp } from './dao/RsvpDAO.js';
@@ -133,6 +134,13 @@ discordService?.onMessage(recordDiscordSender);
 discordService?.onMessage((message, link) => relayFromDiscord(bot, message, link));
 discordService?.onEdit((message, link) => relayDiscordEdit(bot, message, link));
 discordService?.onDelete((channel_id, message_id, link) => relayDiscordDeletion(bot, channel_id, message_id, link));
+const reactionMirror = new ReactionMirror(bot);
+discordService?.onReaction((channel_id, message_id, user_id, emoji, added) => reactionMirror.apply({
+    ref: { platform: 'discord', chat_id: channel_id, message_id },
+    user_ref: `discord:${user_id}`,
+    added: added ? [emoji] : [],
+    removed: added ? [] : [emoji]
+}));
 
 // The interaction must be acknowledged quickly; a broadcasting handler's channel copy becomes
 // that answer, anything said after it a follow-up.
@@ -192,6 +200,7 @@ const registerAllDiscordCommands = async (): Promise<void> => {
 const POLLING_RESTART_DELAY_MS = 5000;
 const startPolling = (): void => {
     bot.startPolling(undefined, {
+        allowedUpdates: ['message', 'edited_message', 'callback_query', 'message_reaction'],
         onError: (error: unknown) => console.error('Telegram Polling Error:', error)
     }).catch((error: unknown) => {
         console.error('Telegram Polling Error:', error);
@@ -333,6 +342,13 @@ bot.on('message', (ctx: Context) => {
 
 bot.on('edited_message', (ctx: Context) => {
     relayTelegramEdit(ctx.editedMessage!).catch((err: Error) => console.error('Error relaying Telegram edit:', err));
+});
+
+bot.on('message_reaction', (ctx: Context) => {
+    const change: ReactionChange | undefined = 'message_reaction' in ctx.update ? telegramReactionChange(ctx.update.message_reaction) : undefined;
+    if (change) {
+        reactionMirror.apply(change).catch((err: Error) => console.error('Error mirroring Telegram reaction:', err));
+    }
 });
 
 bot.on('callback_query', (ctx: Context) => {

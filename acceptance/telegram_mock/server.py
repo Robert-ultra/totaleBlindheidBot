@@ -8,6 +8,7 @@ The bot polls `getUpdates`; we hand it whatever updates behave injected. Every
 outgoing `sendMessage`/`editMessageText` is recorded in an in-memory outbox that
 behave can read back and assert against.
 """
+import json
 import logging
 import threading
 from typing import Any, Dict, List
@@ -46,6 +47,17 @@ _users: Dict[str, Dict[str, Any]] = {}
 
 # Files behind injected media, by file_id; one registered with a size but no data is "too big".
 _files: Dict[str, Dict[str, Any]] = {}
+
+
+# Update types Telegram only delivers when a bot lists them in allowed_updates.
+OPT_IN_UPDATES = {"chat_member", "message_reaction", "message_reaction_count"}
+
+
+def _wanted(update: Dict[str, Any], allowed: Any) -> bool:
+    kind = next(key for key in update if key != "update_id")
+    if isinstance(allowed, str):
+        allowed = json.loads(allowed)
+    return kind in allowed if allowed else kind not in OPT_IN_UPDATES
 
 
 def _reset() -> None:
@@ -89,10 +101,12 @@ def bot_api(token: str, method: str) -> Response:
                 # Telegram semantics: offset confirms receipt of everything
                 # with update_id < offset, so drop those.
                 _updates[:] = [u for u in _updates if u["update_id"] >= offset]
+            # Telegram drops the update types a bot did not ask for.
+            _updates[:] = [u for u in _updates if _wanted(u, params.get("allowed_updates"))]
             # Long-poll like the real API; the bot re-polls immediately.
             if timeout > 0:
                 _updates_available.wait_for(lambda: _updates, timeout=timeout)
-            result = list(_updates)
+            result = [u for u in _updates if _wanted(u, params.get("allowed_updates"))]
         return jsonify({"ok": True, "result": result})
     elif method == "sendMessage":
         with _lock:
@@ -232,6 +246,20 @@ def bot_api(token: str, method: str) -> Response:
             },
         })
 
+    elif method == "setMessageReaction":
+        with _lock:
+            reaction = params.get("reaction", [])
+            if isinstance(reaction, str):
+                reaction = json.loads(reaction)
+            _outbox.append({
+                "method": "setMessageReaction",
+                "chat_id": str(params.get("chat_id")),
+                "message_id": _maybe_int(params.get("message_id")),
+                "text": " ".join(r["emoji"] for r in reaction),
+                "params": params,
+            })
+        return jsonify({"ok": True, "result": True})
+
     # deleteWebhook and anything else the library happens to call.
     return jsonify({"ok": True, "result": True})
 
@@ -266,7 +294,7 @@ def inject() -> Response:
     global _next_update_id
     body = request.get_json(force=True) or {}
     with _lock:
-        if any(key in body for key in ("message", "edited_message", "callback_query")):
+        if any(key in body for key in ("message", "edited_message", "callback_query", "message_reaction")):
             update = dict(body)
         else:
             update = {"message": body}

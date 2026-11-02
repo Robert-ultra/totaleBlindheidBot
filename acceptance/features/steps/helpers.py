@@ -199,6 +199,19 @@ def inject_edited_message(text: str, chat_id: int, user: Dict[str, Any], message
     requests.post(f"{TELEGRAM_MOCK_URL}/test/inject", json={"edited_message": edited}, timeout=5).raise_for_status()
 
 
+def inject_reaction(chat_id: int, message_id: int, user_id: int, old: List[Dict[str, Any]], new: List[Dict[str, Any]]) -> None:
+    """A Telegram user changes their reactions to a message: Telegram sends both lists."""
+    reaction: Dict[str, Any] = {
+        "chat": {"id": int(chat_id), "type": "group", "title": f"Group {chat_id}"},
+        "message_id": int(message_id),
+        "user": {"id": int(user_id), "is_bot": False, "first_name": f"User{user_id}"},
+        "date": int(time.time()),
+        "old_reaction": old,
+        "new_reaction": new,
+    }
+    requests.post(f"{TELEGRAM_MOCK_URL}/test/inject", json={"message_reaction": reaction}, timeout=5).raise_for_status()
+
+
 def register_file(file_id: str, content: Optional[bytes], content_type: Optional[str] = None) -> None:
     """Register the bytes behind a Telegram file_id (None: a file too big for the bot to download)."""
     import base64
@@ -465,6 +478,11 @@ def discord_edit(message_id: str, content: str) -> None:
 
 def discord_delete(message_id: str) -> None:
     requests.post(f"{DISCORD_MOCK_URL}/test/delete", json={"message_id": message_id}, timeout=5).raise_for_status()
+
+
+def discord_react(message_id: str, user: Dict[str, Any], emoji: str, remove: bool = False, emoji_id: Optional[str] = None) -> None:
+    body: Dict[str, Any] = {"message_id": message_id, "user": user, "emoji": emoji, "remove": remove, "emoji_id": emoji_id}
+    requests.post(f"{DISCORD_MOCK_URL}/test/react", json=body, timeout=5).raise_for_status()
 
 
 def discord_inject(channel_id: str, content: str, author: Dict[str, Any], **extra: Any) -> Dict[str, Any]:

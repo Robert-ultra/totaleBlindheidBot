@@ -352,3 +352,50 @@ def step_channel_receives_file(context: Context, channel_id: str, filename: str,
     hits = [m for m in new if m["method"] == "executeWebhook" and m["username"] == name and m["content"] == text
             and any(a["filename"] == filename for a in m["attachments"])]
     assert hits, f"Expected file {filename!r} with text {text!r} from {name!r} in channel {channel_id}, got {[(m['method'], m['username'], m['content'], m['attachments']) for m in new]}"
+
+
+def _discord_react(context: Context, user: Dict[str, Any], text: str, channel_id: str, emoji: str, **extra: Any) -> None:
+    context.cmd_baseline = len(helpers.get_outbox(context.chat_id))
+    helpers.discord_react(_copy_of(channel_id, text) or context.discord_sent[text], user, emoji, **extra)
+
+
+@when('Discord user "(?P<username>[^"]*)" with id "(?P<user_id>\\d+)" reacts with "(?P<emoji>[^"]*)" to "(?P<text>[^"]*)" in channel "(?P<channel_id>\\d+)"')
+def step_discord_user_reacts(context: Context, username: str, user_id: str, emoji: str, text: str, channel_id: str) -> None:
+    _discord_react(context, {"id": user_id, "username": username}, text, channel_id, emoji)
+
+
+@when('Discord user "(?P<username>[^"]*)" with id "(?P<user_id>\\d+)" reacts with the custom emoji "(?P<emoji>[^"]*)" to "(?P<text>[^"]*)" in channel "(?P<channel_id>\\d+)"')
+def step_discord_user_reacts_custom(context: Context, username: str, user_id: str, emoji: str, text: str, channel_id: str) -> None:
+    _discord_react(context, {"id": user_id, "username": username}, text, channel_id, emoji, emoji_id="860500000000000099")
+
+
+@when('Discord user "(?P<username>[^"]*)" with id "(?P<user_id>\\d+)" removes their "(?P<emoji>[^"]*)" reaction to "(?P<text>[^"]*)" in channel "(?P<channel_id>\\d+)"')
+def step_discord_user_unreacts(context: Context, username: str, user_id: str, emoji: str, text: str, channel_id: str) -> None:
+    _discord_react(context, {"id": user_id, "username": username}, text, channel_id, emoji, remove=True)
+
+
+def _own_reaction(context: Context, channel_id: str, text: str, method: str, emoji: str) -> Callable[[Dict[str, Any]], bool]:
+    target: Optional[str] = _copy_of(channel_id, text) or getattr(context, "discord_sent", {}).get(text)
+    return lambda m: m["method"] == method and m["message_id"] == target and m["content"] == emoji
+
+
+@then('Discord channel "(?P<channel_id>\\d+)" sees the bot react with "(?P<emoji>[^"]*)" to "(?P<text>[^"]*)"')
+def step_channel_bot_reacts(context: Context, channel_id: str, emoji: str, text: str) -> None:
+    accept = _own_reaction(context, channel_id, text, "addReaction", emoji)
+    new: List[Dict[str, Any]] = _new_messages(context, channel_id, accept)
+    assert any(accept(m) for m in new), f"Expected the bot to react with {emoji!r} to {text!r} in channel {channel_id}, got {_describe(new)}"
+
+
+@then('Discord channel "(?P<channel_id>\\d+)" sees the bot take back its "(?P<emoji>[^"]*)" reaction to "(?P<text>[^"]*)"')
+def step_channel_bot_unreacts(context: Context, channel_id: str, emoji: str, text: str) -> None:
+    accept = _own_reaction(context, channel_id, text, "removeReaction", emoji)
+    new: List[Dict[str, Any]] = _new_messages(context, channel_id, accept)
+    assert any(accept(m) for m in new), f"Expected the bot to remove its {emoji!r} reaction to {text!r} in channel {channel_id}, got {_describe(new)}"
+
+
+@then('Discord channel "(?P<channel_id>\\d+)" sees no reaction changes from the bot')
+def step_channel_no_bot_reactions(context: Context, channel_id: str) -> None:
+    time.sleep(3)
+    new: List[Dict[str, Any]] = helpers.discord_outbox(channel_id)[_baseline(context, channel_id):]
+    changes: List[Dict[str, Any]] = [m for m in new if m["method"] in ("addReaction", "removeReaction")]
+    assert not changes, f"Expected no reaction changes from the bot in channel {channel_id}, got {_describe(changes)}"
