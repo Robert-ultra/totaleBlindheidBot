@@ -8,7 +8,7 @@
     "scripts": {
         "start": "node --loader ts-node/esm main.ts",
         "build": "tsc && cp dao/schema.sql dist/dao/schema.sql",
-        "test": "node --import \"data:text/javascript,import { register } from 'node:module'; import { pathToFileURL } from 'node:url'; register('ts-node/esm', pathToFileURL('./'));\" --test test/*.test.ts"
+        "test": "npm run build && node --test dist/test/*.test.js"
     },
     "engines": {
         "node": ">=24"
