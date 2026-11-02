@@ -45,7 +45,7 @@ export interface Webhook {
 }
 
 // Discord webhook names (and the per-message username override) may not contain these.
-const sanitizeWebhookName = (name: string): string =>
+export const sanitizeWebhookName = (name: string): string =>
     name.replace(/discord/gi, 'didi').replace(/clyde/gi, 'dada').slice(0, 80) || 'someone';
 
 export type DiscordMessageHandler = (message: Message, link: ChatLink) => Promise<void>;

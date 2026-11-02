@@ -98,3 +98,13 @@ Feature: linking Discord channels to a Telegram group
     And a user with id 7112 and first name "Member"
     When the user sends "/unlink_chat"
     Then the bot replies "Only a group admin can link or unlink Discord channels."
+
+  Scenario: a slash command in a channel that is not linked is turned away privately
+    Given a chat with id 6011
+    And a user with id 7011 and first name "Admin"
+    And a Discord server "6011" named "Two Rooms" with channels "60111" named "linked" and "60112" named "other"
+    And Discord channel "60111" is linked to the chat
+    When Discord user "lou_cs" named "Lou" with id "601100000000000001" runs "/rollcall" in channel "60112"
+    Then Discord channel "60112" gets the private answer "This channel is not linked to a Telegram group."
+    And the bot sends no reply
+    And Discord channel "60111" receives nothing

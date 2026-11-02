@@ -24,7 +24,7 @@ export const recordDiscordSender = async (message: DiscordMessage, link: ChatLin
     await userDao.addUserChat(user.id, link.telegram_chat_id);
 };
 
-const telegramName = (from: TelegramMessage['from']): string =>
+export const telegramName = (from: TelegramMessage['from']): string =>
     [from?.first_name, from?.last_name].filter(Boolean).join(' ') || from?.username || 'someone';
 
 export const relayFromTelegram = async (bot: Bot, msg: TelegramMessage): Promise<void> => {
