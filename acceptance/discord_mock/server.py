@@ -711,6 +711,9 @@ def inject_message() -> Response:
             webhook_id=body.get("webhook_id"), member=member, attachments=attachments
         )
         message["mentions"] = body.get("mentions", [])
+        if body.get("reply_to"):
+            message["type"] = 19
+            message["message_reference"] = {"type": 0, "message_id": body["reply_to"], "channel_id": body["channel_id"], "guild_id": guild["id"]}
         # format_type: 1 PNG, 2 APNG, 3 Lottie, 4 GIF.
         stickers = []
         for spec in body.get("stickers", []):

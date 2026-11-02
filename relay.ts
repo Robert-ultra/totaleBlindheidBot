@@ -2,8 +2,8 @@ import { Bot, Message as TelegramMessage } from 'node-telegram-bot-api';
 import { Message as DiscordMessage, PartialMessage } from 'discord.js';
 import ChatLinkDAO, { ChatLink } from './dao/ChatLinkDAO.js';
 import UserDAO from './dao/UserDAO.js';
-import DiscordService from './discord/DiscordService.js';
-import RelayedMessageDAO, { CopyKind, MessageRef, RelayedMessage } from './dao/RelayedMessageDAO.js';
+import DiscordService, { ReplyTo } from './discord/DiscordService.js';
+import RelayedMessageDAO, { CopyKind, MessageRef, Platform, RelayedMessage } from './dao/RelayedMessageDAO.js';
 import { toDiscordMarkdown } from './discord/markdown.js';
 import { bold, fmt, Formatted, messageText } from './format.js';
 import { discordMedia, downloadTelegramFile, downloadUrl, RelayFile, sendTelegramFile, telegramMedia, TelegramMedia, TelegramSendKind } from './media.js';
@@ -55,7 +55,8 @@ export const relayFromTelegram = async (bot: Bot, msg: TelegramMessage): Promise
     }
 
     const author: string = telegramName(msg.from);
-    const copies = await Promise.all(links.map(link => discord.relay(link, author, content, files)
+    const replied: RelayedMessage[] = await telegramReply(msg);
+    const copies = await Promise.all(links.map(link => discord.relay(link, author, content, files, replyIn(replied, 'discord', link.discord_channel_id))
         .then(sent => ({ platform: 'discord' as const, chat_id: link.discord_channel_id, ...sent }))
         .catch((err: Error) => {
             console.error(`Could not relay Telegram message ${msg.message_id} to Discord channel ${link.discord_channel_id}:`, err);
@@ -68,6 +69,24 @@ type Copy = MessageRef & { kind: CopyKind };
 const isDefined = <T>(value: T | undefined): value is T => value !== undefined;
 
 const telegramRef = (msg: TelegramMessage): MessageRef => ({ platform: 'telegram', chat_id: String(msg.chat.id), message_id: String(msg.message_id) });
+
+// The replied-to message with its copies, when it was relayed.
+const repliedTo = async (ref: MessageRef | undefined): Promise<RelayedMessage[]> => {
+    const replied: RelayedMessage | undefined = ref && await relayedDao.find(ref);
+    return replied ? relayedDao.group(replied) : [];
+};
+
+const telegramReply = (msg: TelegramMessage): Promise<RelayedMessage[]> =>
+    repliedTo(msg.reply_to_message && { platform: 'telegram', chat_id: String(msg.chat.id), message_id: String(msg.reply_to_message.message_id) });
+
+const discordReply = (message: DiscordMessage): Promise<RelayedMessage[]> =>
+    repliedTo(message.reference?.messageId ? { platform: 'discord', chat_id: message.reference.channelId, message_id: message.reference.messageId } : undefined);
+
+// Where the replied-to message is in this chat or channel.
+const replyIn = (group: RelayedMessage[], platform: Platform, chat_id: string): ReplyTo | undefined => {
+    const target: RelayedMessage | undefined = group.find(m => m.platform === platform && m.chat_id === chat_id);
+    return target && { author: group[0].author ?? '', message_id: target.message_id };
+};
 
 // The Telegram text or caption as Discord markdown, after any media placeholder.
 const discordContent = (msg: TelegramMessage, media: TelegramMedia | undefined): string => {
@@ -91,11 +110,11 @@ const copiesOf = async (ref: MessageRef): Promise<{ original: RelayedMessage; co
     return original?.kind === 'origin' ? { original, copies: (await relayedDao.group(original)).slice(1) } : undefined;
 };
 
-const editDiscordCopies = async (discord: DiscordService, telegram_chat_id: number, author: string, copies: RelayedMessage[], content: string): Promise<void> => {
+const editDiscordCopies = async (discord: DiscordService, telegram_chat_id: number, author: string, copies: RelayedMessage[], content: string, replied: RelayedMessage[]): Promise<void> => {
     const links: ChatLink[] = await chatLinkDao.getLinks(telegram_chat_id);
     await Promise.all(copies.filter(copy => copy.platform === 'discord').map(copy => {
         const link: ChatLink | undefined = links.find(l => l.discord_channel_id === copy.chat_id);
-        return link && discord.editRelayed(link, copy.message_id, copy.kind as CopyKind, author, content)
+        return link && discord.editRelayed(link, copy.message_id, copy.kind as CopyKind, author, content, replyIn(replied, 'discord', copy.chat_id))
             .catch((err: Error) => console.error(`Could not edit relayed message ${copy.message_id} in Discord channel ${copy.chat_id}:`, err));
     }));
 };
@@ -129,7 +148,7 @@ export const relayTelegramEdit = async (msg: TelegramMessage): Promise<void> => 
     if (!discord || !relayed) {
         return;
     }
-    await editDiscordCopies(discord, msg.chat.id, relayed.original.author ?? telegramName(msg.from), relayed.copies, discordContent(msg, telegramMedia(msg)));
+    await editDiscordCopies(discord, msg.chat.id, relayed.original.author ?? telegramName(msg.from), relayed.copies, discordContent(msg, telegramMedia(msg)), await telegramReply(msg));
 };
 
 export const relayDiscordEdit = async (bot: Bot, edited: DiscordMessage | PartialMessage, link: ChatLink): Promise<void> => {
@@ -149,7 +168,7 @@ export const relayDiscordEdit = async (bot: Bot, edited: DiscordMessage | Partia
                 : Promise.resolve();
         return edit.catch((err: Error) => console.error(`Could not edit relayed message ${copy.message_id} in Telegram chat ${copy.chat_id}:`, err));
     }));
-    await editDiscordCopies(discord, link.telegram_chat_id, message.author.username, relayed.copies, texts.discord);
+    await editDiscordCopies(discord, link.telegram_chat_id, message.author.username, relayed.copies, texts.discord, await discordReply(message));
 };
 
 export const relayFromDiscord = async (bot: Bot, message: DiscordMessage, link: ChatLink): Promise<void> => {
@@ -175,6 +194,10 @@ export const relayFromDiscord = async (bot: Bot, message: DiscordMessage, link: 
     const downloaded: { file: RelayFile; kind: TelegramSendKind }[] = downloads.filter((d): d is { file: RelayFile; kind: TelegramSendKind } => d !== undefined);
     const files: RelayFile[] = downloaded.map(d => d.file);
 
+    const replied: RelayedMessage[] = await discordReply(message);
+    // The first message sent on Telegram is the reply.
+    const reply: ReplyTo | undefined = replyIn(replied, 'telegram', String(link.telegram_chat_id));
+    const replyTo: number | undefined = reply && Number(reply.message_id);
     const copies: Copy[] = [];
     const telegramCopy = (message_id: number, kind: CopyKind): Copy =>
         ({ platform: 'telegram', chat_id: String(link.telegram_chat_id), message_id: String(message_id), kind });
@@ -182,12 +205,14 @@ export const relayFromDiscord = async (bot: Bot, message: DiscordMessage, link: 
         // The text rides as the first file's caption when it fits.
         let caption: Formatted | undefined = texts.telegram;
         if (files.length === 0 || texts.telegram.text.length > TELEGRAM_CAPTION_LIMIT) {
-            const sent = await bot.api.sendMessage({ chat_id: link.telegram_chat_id, ...messageText(texts.telegram) });
+            const sent = await bot.api.sendMessage({ chat_id: link.telegram_chat_id, ...messageText(texts.telegram),
+                ...(replyTo !== undefined ? { reply_parameters: { message_id: replyTo, allow_sending_without_reply: true } } : {}) });
             copies.push(telegramCopy(sent.message_id, 'text'));
             caption = files.length > 0 ? bold(`${author}:`) : undefined;
         }
         await downloaded.reduce<Promise<unknown>>((sending, { file, kind }, i) => sending
-            .then(() => sendTelegramFile(bot, link.telegram_chat_id, kind, file, i === 0 ? caption : bold(`${author}:`)))
+            .then(() => sendTelegramFile(bot, link.telegram_chat_id, kind, file, i === 0 ? caption : bold(`${author}:`),
+                i === 0 && copies.length === 0 ? replyTo : undefined))
             .then(message_id => copies.push(telegramCopy(message_id, i === 0 && caption === texts.telegram ? 'caption' : 'extra'))), Promise.resolve());
     } catch (err) {
         console.error(`Could not relay Discord message ${message.id} to Telegram chat ${link.telegram_chat_id}:`, err);
@@ -195,7 +220,7 @@ export const relayFromDiscord = async (bot: Bot, message: DiscordMessage, link: 
 
     const others: ChatLink[] = (await chatLinkDao.getLinks(link.telegram_chat_id))
         .filter(other => other.discord_channel_id !== link.discord_channel_id);
-    const discordCopies = await Promise.all(others.map(other => discord.relay(other, author, texts.discord, files)
+    const discordCopies = await Promise.all(others.map(other => discord.relay(other, author, texts.discord, files, replyIn(replied, 'discord', other.discord_channel_id))
         .then(sent => ({ platform: 'discord' as const, chat_id: other.discord_channel_id, ...sent }))
         .catch((err: Error) => {
             console.error(`Could not relay Discord message ${message.id} to Discord channel ${other.discord_channel_id}:`, err);

@@ -175,8 +175,8 @@ def inject_message(
     return {**resp.json(), "message_id": message["message_id"]}
 
 
-def inject_edited_message(text: str, chat_id: int, user: Dict[str, Any], message_id: int) -> None:
-    """Deliver an edit of a message the user sent earlier."""
+def inject_edited_message(text: str, chat_id: int, user: Dict[str, Any], message_id: int, reply_to_message_id: Optional[int] = None) -> None:
+    """Deliver an edit of a message the user sent earlier; like Telegram, it still says what it replied to."""
     edited: Dict[str, Any] = {
         "message_id": message_id,
         "date": int(time.time()),
@@ -186,6 +186,9 @@ def inject_edited_message(text: str, chat_id: int, user: Dict[str, Any], message
                  "username": user.get("username", "tester")},
         "text": text,
     }
+    if reply_to_message_id is not None:
+        edited["reply_to_message"] = {"message_id": int(reply_to_message_id), "date": int(time.time()),
+                                      "chat": {"id": int(chat_id), "type": "group"}}
     requests.post(f"{TELEGRAM_MOCK_URL}/test/inject", json={"edited_message": edited}, timeout=5).raise_for_status()
 
 
