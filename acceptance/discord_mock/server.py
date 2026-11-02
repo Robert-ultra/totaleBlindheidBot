@@ -409,6 +409,31 @@ def delete_message(channel_id: str, message_id: str) -> Response:
     return Response(status=204)
 
 
+# Discord answers Unknown Emoji when these come without the emoji presentation selector.
+UNQUALIFIED_EMOJI = {"❤", "❤\u200d🔥", "🕊", "✍", "☃", "🤷\u200d♂", "🤷\u200d♀"}
+
+
+def _reaction_event(message: Dict[str, Any], user_id: str, emoji: Dict[str, Any]) -> Dict[str, Any]:
+    return {"user_id": user_id, "channel_id": message["channel_id"], "message_id": message["id"],
+            "guild_id": message.get("guild_id"), "emoji": emoji, "burst": False, "type": 0}
+
+
+@app.route("/api/v10/channels/<channel_id>/messages/<message_id>/reactions/<emoji>/@me", methods=["PUT", "DELETE"])
+def own_reaction(channel_id: str, message_id: str, emoji: str) -> Response:
+    added = request.method == "PUT"
+    with _lock:
+        message = _messages.get(message_id)
+        if message is None:
+            return _error(404, 10008, "Unknown Message")
+        elif emoji in UNQUALIFIED_EMOJI:
+            return _error(400, 10014, "Unknown Emoji")
+        _outbox.append({"method": "addReaction" if added else "removeReaction", "channel_id": channel_id,
+                        "message_id": message_id, "content": emoji, "username": None, "attachments": [], "params": {}})
+        event = _reaction_event(message, BOT_USER["id"], {"id": None, "name": emoji})
+    _dispatch("MESSAGE_REACTION_ADD" if added else "MESSAGE_REACTION_REMOVE", event)
+    return Response(status=204)
+
+
 @app.route("/api/v10/channels/<channel_id>/webhooks", methods=["POST"])
 def create_webhook(channel_id: str) -> Response:
     body = _body()
@@ -751,6 +776,23 @@ def delete_injected() -> Response:
         if message is None:
             return _error(404, 10008, "Unknown Message")
     _dispatch("MESSAGE_DELETE", {"id": message["id"], "channel_id": message["channel_id"], "guild_id": message.get("guild_id")})
+    return jsonify({"ok": True})
+
+
+@app.route("/test/react", methods=["POST"])
+def react() -> Response:
+    """A Discord user adds or removes a reaction; `emoji_id` makes it a custom emoji."""
+    body = request.get_json(force=True) or {}
+    added = not body.get("remove")
+    with _lock:
+        message = _messages.get(body["message_id"])
+        if message is None:
+            return _error(404, 10008, "Unknown Message")
+        user = {"discriminator": "0", "avatar": None, "bot": False, "global_name": None, **body["user"]}
+        event = _reaction_event(message, user["id"], {"id": body.get("emoji_id"), "name": body["emoji"]})
+        if added:
+            event["member"] = {"user": user, "roles": [], "joined_at": _now(), "deaf": False, "mute": False, "flags": 0}
+    _dispatch("MESSAGE_REACTION_ADD" if added else "MESSAGE_REACTION_REMOVE", event)
     return jsonify({"ok": True})
 
 

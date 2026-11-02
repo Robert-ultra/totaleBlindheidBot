@@ -261,3 +261,13 @@ CREATE TABLE IF NOT EXISTS relayed_message (
     UNIQUE KEY uq_relayed_message (platform, chat_id, message_id),
     KEY idx_relayed_message_origin (origin_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Who reacted with what on a relayed message, so every copy can show the reactions from the others.
+CREATE TABLE IF NOT EXISTS relayed_reaction (
+    relayed_id BIGINT      NOT NULL,
+    user_ref   VARCHAR(64) NOT NULL,
+    emoji      VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+    PRIMARY KEY (relayed_id, user_ref, emoji),
+    CONSTRAINT fk_relayed_reaction_message FOREIGN KEY (relayed_id)
+        REFERENCES relayed_message (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

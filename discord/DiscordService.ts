@@ -10,13 +10,18 @@ import {
     GuildTextBasedChannel,
     Interaction,
     Message,
+    MessageReaction,
     MessageFlags,
     PartialMessage,
     Partials,
     PermissionFlagsBits,
     PermissionsBitField,
+    PartialMessageReaction,
+    PartialUser,
     RESTOptions,
+    Routes,
     TextChannel,
+    User,
     WebhookClient
 } from 'discord.js';
 import ChatLinkDAO, { ChatLink } from '../dao/ChatLinkDAO.js';
@@ -67,6 +72,7 @@ const botRelayText = (author: string, content: string): string => content ? `**$
 export type DiscordMessageHandler = (message: Message, link: ChatLink) => Promise<void>;
 export type DiscordEditHandler = (message: Message | PartialMessage, link: ChatLink) => Promise<void>;
 export type DiscordDeleteHandler = (channel_id: string, message_id: string, link: ChatLink) => Promise<void>;
+export type DiscordReactionHandler = (channel_id: string, message_id: string, user_id: string, emoji: string, added: boolean) => Promise<void>;
 export type DiscordCommandHandler = (interaction: ChatInputCommandInteraction, link: ChatLink) => Promise<void>;
 export type DiscordButtonHandler = (interaction: ButtonInteraction, link: ChatLink) => Promise<void>;
 
@@ -95,6 +101,7 @@ class DiscordService {
     private messageHandlers: DiscordMessageHandler[] = [];
     private editHandlers: DiscordEditHandler[] = [];
     private deleteHandlers: DiscordDeleteHandler[] = [];
+    private reactionHandlers: DiscordReactionHandler[] = [];
     private commandHandlers: DiscordCommandHandler[] = [];
     private buttonHandlers: DiscordButtonHandler[] = [];
     private slashCommands: SlashCommand[] = [];
@@ -106,9 +113,9 @@ class DiscordService {
             ...(process.env.DISCORD_CDN_BASE_URL ? { cdn: process.env.DISCORD_CDN_BASE_URL, mediaProxy: process.env.DISCORD_CDN_BASE_URL } : {})
         };
         this.client = new Client({
-            intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
+            intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMessageReactions],
             // Edits to messages from before a restart arrive uncached.
-            partials: [Partials.Message],
+            partials: [Partials.Message, Partials.Reaction, Partials.User],
             rest: this.restOptions
         });
         this.client.on('clientReady', () => console.log(`Logged on to Discord as ${this.client.user?.tag}`));
@@ -121,6 +128,12 @@ class DiscordService {
         });
         this.client.on('messageDelete', message => {
             this.handleDelete(message.channelId, message.id).catch((err: Error) => console.error('Error handling Discord deletion:', err));
+        });
+        this.client.on('messageReactionAdd', (reaction, user) => {
+            this.handleReaction(reaction, user, true).catch((err: Error) => console.error('Error handling Discord reaction:', err));
+        });
+        this.client.on('messageReactionRemove', (reaction, user) => {
+            this.handleReaction(reaction, user, false).catch((err: Error) => console.error('Error handling Discord reaction:', err));
         });
         this.client.on('interactionCreate', (interaction: Interaction) => {
             this.handleInteraction(interaction).catch((err: Error) => console.error('Error handling Discord interaction:', err));
@@ -148,6 +161,10 @@ class DiscordService {
 
     onDelete(handler: DiscordDeleteHandler): void {
         this.deleteHandlers.push(handler);
+    }
+
+    onReaction(handler: DiscordReactionHandler): void {
+        this.reactionHandlers.push(handler);
     }
 
     onCommand(handler: DiscordCommandHandler): void {
@@ -221,6 +238,20 @@ class DiscordService {
         if (link) {
             await Promise.all(this.deleteHandlers.map(handler => handler(channel_id, message_id, link)));
         }
+    }
+
+    // Custom emoji (those with an id) can't be shown elsewhere.
+    private async handleReaction(reaction: MessageReaction | PartialMessageReaction, user: User | PartialUser, added: boolean): Promise<void> {
+        const emoji: string | null = reaction.emoji.id ? null : reaction.emoji.name;
+        if (!emoji || user.id === this.client.user?.id || !await this.chatLinkDao.getLinkByChannel(reaction.message.channelId)) {
+            return;
+        }
+        await Promise.all(this.reactionHandlers.map(handler => handler(reaction.message.channelId, reaction.message.id, user.id, emoji, added)));
+    }
+
+    async setOwnReaction(channel_id: string, message_id: string, emoji: string, on: boolean): Promise<void> {
+        const route = Routes.channelMessageOwnReaction(channel_id, message_id, encodeURIComponent(emoji));
+        await (on ? this.client.rest.put(route) : this.client.rest.delete(route));
     }
 
     private async fetchGuildTextChannel(channel_id: string): Promise<GuildTextBasedChannel | null | undefined> {
