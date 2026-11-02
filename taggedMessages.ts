@@ -2,12 +2,13 @@ import { Bot, InlineKeyboardMarkup, Message } from 'node-telegram-bot-api';
 import SteamService from './SteamService.js';
 import RsvpDAO, { Rsvp, RsvpList, RsvpMessageRef } from './dao/RsvpDAO.js';
 import DiscordService, { rsvpComponents } from './discord/DiscordService.js';
-import { renderDiscordMessage } from './discord/render.js';
+import { renderDiscordMessage, withDiscordTags } from './discord/render.js';
 import RollcallPlayerDAO from './dao/RollcallPlayerDAO.js';
 import TaggedMessageDAO, { TaggedMessage } from './dao/TaggedMessageDAO.js';
 import { Formatted, messageText } from './format.js';
-import { keyboard, renderMessage, resolve } from './rsvp.js';
+import { keyboard, renderMessage, resolve, RsvpKeyboardKind } from './rsvp.js';
 import { mentionUserId, mentionUsers, presenceMarkers, withTags } from './presence.js';
+import { editDiscordCopies } from './messenger.js';
 
 // How long after a message is sent its presence markers are kept up to date. Once it passes,
 // the markers are stripped rather than left stale. Overridable for tests.
@@ -58,12 +59,12 @@ const editText = (bot: Bot, chat_id: number, message_id: number, content: Format
 const rsvpGroups = (list: RsvpList): Promise<Record<Rsvp, string[]>> =>
     rollcallPlayerDao.getRollcallPlayerUsernames(list.chat_id).then(rotation => resolve(rotation, list.entries).groups);
 
-const editDiscordCopy = async (ref: RsvpMessageRef & { platform: 'discord' }, groups: Record<Rsvp, string[]>, retired: boolean): Promise<void> => {
+const editDiscordCopy = async (ref: RsvpMessageRef & { platform: 'discord' }, base: string, groups: Record<Rsvp, string[]>, retired: boolean): Promise<void> => {
     const discord: DiscordService | null = DiscordService.instance;
     if (!discord) {
         return;
     }
-    await discord.editMessage(ref.channel_id, ref.message_id, renderDiscordMessage(ref.base.text, groups), retired ? [] : rsvpComponents(ref.keyboard))
+    await discord.editMessage(ref.channel_id, ref.message_id, renderDiscordMessage(base, groups), retired ? [] : rsvpComponents(ref.keyboard))
         .catch((err: Error) => console.error(`Error updating Discord message ${ref.message_id} in channel ${ref.channel_id}:`, err));
 };
 
@@ -93,14 +94,21 @@ const renderRsvpList = (bot: Bot, rsvp_id: number): Promise<void> => withLock(rs
         return;
     }
     const groups = await rsvpGroups(list);
+    // A Discord copy shows the markers of the Telegram message it was sent alongside.
+    const live: Partial<Record<RsvpKeyboardKind, TaggedMessage>> = {};
     await Promise.all(list.messages.map(async ref => {
-        if (ref.platform === 'discord') {
-            return editDiscordCopy(ref, groups, false);
+        const tagged: TaggedMessage | undefined = ref.platform === 'telegram' ? await taggedMessageDao.getTaggedMessage(list.chat_id, ref.message_id) : undefined;
+        if (tagged && isLive(tagged)) {
+            live[ref.keyboard] = tagged;
         }
-        const tagged: TaggedMessage | undefined = await taggedMessageDao.getTaggedMessage(list.chat_id, ref.message_id);
-        const base: Formatted = tagged && isLive(tagged)
-            ? withTags(tagged.head, tagged.tags, await mentionUsers(tagged.tags), await presenceMarkers(tagged.tags))
-            : ref.base;
+    }));
+    await Promise.all(list.messages.map(async ref => {
+        const tagged: TaggedMessage | undefined = live[ref.keyboard];
+        const [users, markers] = tagged ? await Promise.all([mentionUsers(tagged.tags), presenceMarkers(tagged.tags)]) : [{}, {}];
+        if (ref.platform === 'discord') {
+            return editDiscordCopy(ref, tagged ? withDiscordTags(tagged.head, tagged.tags, users, markers) : ref.base.text, groups, false);
+        }
+        const base: Formatted = tagged ? withTags(tagged.head, tagged.tags, users, markers) : ref.base;
         await editText(bot, list.chat_id, ref.message_id, renderMessage(base, groups), keyboard(ref.keyboard));
     }));
 });
@@ -109,7 +117,7 @@ const renderRsvpList = (bot: Bot, rsvp_id: number): Promise<void> => withLock(rs
 // along with its presence markers if they were still being kept up to date.
 const retireRsvpMessage = async (bot: Bot, list: RsvpList, ref: RsvpMessageRef, groups: Record<Rsvp, string[]>): Promise<void> => {
     if (ref.platform === 'discord') {
-        await editDiscordCopy(ref, groups, true);
+        await editDiscordCopy(ref, ref.base.text, groups, true);
     } else if (await taggedMessageDao.deleteTaggedMessage(list.chat_id, ref.message_id)) {
         await editText(bot, list.chat_id, ref.message_id, renderMessage(ref.base, groups), { inline_keyboard: [] });
     } else {
@@ -158,7 +166,9 @@ const refreshPlainMessage = (bot: Bot, chat_id: number, message_id: number): Pro
     withLock(messageLockKey(chat_id, message_id), async () => {
         const tagged: TaggedMessage | undefined = await taggedMessageDao.getTaggedMessage(chat_id, message_id);
         if (tagged && isLive(tagged)) {
-            await editText(bot, chat_id, message_id, withTags(tagged.head, tagged.tags, await mentionUsers(tagged.tags), await presenceMarkers(tagged.tags)));
+            const [users, markers] = await Promise.all([mentionUsers(tagged.tags), presenceMarkers(tagged.tags)]);
+            await editText(bot, chat_id, message_id, withTags(tagged.head, tagged.tags, users, markers));
+            await editDiscordCopies(chat_id, message_id, withDiscordTags(tagged.head, tagged.tags, users, markers));
         }
     });
 
@@ -188,7 +198,9 @@ const stripTaggedMessage = async (bot: Bot, message: TaggedMessage): Promise<voi
     if (!message.rsvp) {
         return withLock(messageLockKey(message.chat_id, message.message_id), async () => {
             if (await taggedMessageDao.deleteTaggedMessage(message.chat_id, message.message_id)) {
-                await editText(bot, message.chat_id, message.message_id, withTags(message.head, message.tags, await mentionUsers(message.tags)));
+                const users = await mentionUsers(message.tags);
+                await editText(bot, message.chat_id, message.message_id, withTags(message.head, message.tags, users));
+                await editDiscordCopies(message.chat_id, message.message_id, withDiscordTags(message.head, message.tags, users));
             }
         });
     }

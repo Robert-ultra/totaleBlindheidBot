@@ -92,19 +92,30 @@ export const sendMirrored = async (bot: Bot, chat_id: number, text: Formatted, a
     return sent;
 };
 
-const editCopies = async (chat_id: number, message_id: number, text: Formatted): Promise<void> => {
+// Remembers a broadcast's Discord copies so editDiscordCopies can reach them.
+export const rememberCopies = async (chat_id: number, sent: Broadcast, author: string): Promise<void> => {
+    if (sent.telegram) {
+        await relayedDao.record(
+            { platform: 'telegram', chat_id: String(chat_id), message_id: String(sent.telegram.message_id) },
+            author,
+            sent.discord.map(copy => ({ platform: 'discord', chat_id: copy.where.channel_id, message_id: copy.where.message_id, kind: 'bot' }))
+        );
+    }
+};
+
+export const editDiscordCopies = async (chat_id: number, message_id: number, content: string): Promise<void> => {
     const service: DiscordService | null = DiscordService.instance;
     const origin: RelayedMessage | undefined = await relayedDao.find({ platform: 'telegram', chat_id: String(chat_id), message_id: String(message_id) });
     if (!service || !origin) {
         return;
     }
     const copies: RelayedMessage[] = (await relayedDao.group(origin)).filter(message => message.platform === 'discord');
-    await Promise.all(copies.map(copy => service.editMessage(copy.chat_id, copy.message_id, toDiscordMarkdown(text))
+    await Promise.all(copies.map(copy => service.editMessage(copy.chat_id, copy.message_id, content)
         .catch((err: Error) => console.error(`Could not edit Discord message ${copy.message_id} in channel ${copy.chat_id}:`, err))));
 };
 
 export const editMirrored = async (bot: Bot, chat_id: number, message_id: number, text: Formatted): Promise<void> => {
     await bot.api.editMessageText({ ...messageText(text), chat_id, message_id });
-    await editCopies(chat_id, message_id, text)
+    await editDiscordCopies(chat_id, message_id, toDiscordMarkdown(text))
         .catch((err: Error) => console.error(`Could not mirror the edit of message ${message_id} in chat ${chat_id} to Discord:`, err));
 };

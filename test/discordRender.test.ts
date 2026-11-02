@@ -20,6 +20,11 @@ test('a player stored by Telegram username is pinged on Discord when linked', ()
     assert.equal(withDiscordTags(asFormatted(''), ['@frank'], users), '<@323456789012345678>');
 });
 
+test('each tag is prefixed with its presence marker, as on Telegram', () => {
+    const markers: Record<string, string> = { '[Alice](user:1)': '🟢', '[Bob](user:2)': '🔴' };
+    assert.equal(withDiscordTags(asFormatted('Go!\n'), ['[Alice](user:1)', '[Bob](user:2)', '@dave'], users, markers), 'Go!\n🟢Alice 🔴<@123456789012345678> @dave');
+});
+
 test('the RSVP lists follow the base, escaped for Discord', () => {
     assert.equal(renderDiscordMessage('Go!\nAlice', { yes: ['Alice'], maybe: [], no: ['x_y'] }), 'Go!\nAlice\n\n🙋‍♂️ Alice\n🙅‍♂️ x\\_y');
     assert.equal(renderDiscordMessage('Go!\nAlice', { yes: [], maybe: [], no: [] }), 'Go!\nAlice');

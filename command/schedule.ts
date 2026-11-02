@@ -88,7 +88,7 @@ export default (bot: Bot, cmd: Command): Promise<unknown> => {
 
                     return broadcast(bot, cmd,
                         renderMessage(withTags(head, tagged, users, markers), groups),
-                        renderDiscordMessage(discordBase, groups),
+                        renderDiscordMessage(withDiscordTags(head, tagged, users, markers), groups),
                         { keyboard: 'schedule' }
                     ).then((sent: Broadcast) => {
                         const refs: RsvpMessageRef[] = [
