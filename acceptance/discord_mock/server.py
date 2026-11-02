@@ -425,7 +425,7 @@ def own_reaction(channel_id: str, message_id: str, emoji: str) -> Response:
         message = _messages.get(message_id)
         if message is None:
             return _error(404, 10008, "Unknown Message")
-        if emoji in UNQUALIFIED_EMOJI:
+        elif emoji in UNQUALIFIED_EMOJI:
             return _error(400, 10014, "Unknown Emoji")
         _outbox.append({"method": "addReaction" if added else "removeReaction", "channel_id": channel_id,
                         "message_id": message_id, "content": emoji, "username": None, "attachments": [], "params": {}})
