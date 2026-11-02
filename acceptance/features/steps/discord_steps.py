@@ -445,6 +445,30 @@ def step_channel_no_bot_reactions(context: Context, channel_id: str) -> None:
     assert not changes, f"Expected no reaction changes from the bot in channel {channel_id}, got {_describe(changes)}"
 
 
+@when('Discord user "(?P<username>[^"]*)" named "(?P<name>[^"]*)" with id "(?P<user_id>\\d+)" starts a thread "(?P<thread>[^"]*)" on "(?P<text>[^"]*)" in channel "(?P<channel_id>\\d+)"')
+def step_discord_user_starts_thread(context: Context, username: str, name: str, user_id: str, thread: str, text: str, channel_id: str) -> None:
+    context.cmd_chat = context.chat_id
+    context.cmd_baseline = len(helpers.get_outbox(context.chat_id))
+    starter: str = _copy_of(channel_id, text) or context.discord_sent[text]
+    context.discord_thread = helpers.discord_start_thread(starter, thread, _author(username, name, user_id))
+
+
+@when('Discord user "(?P<username>[^"]*)" named "(?P<name>[^"]*)" with id "(?P<user_id>\\d+)" says "(?P<text>[^"]*)" in that thread')
+def step_discord_user_says_in_thread(context: Context, username: str, name: str, user_id: str, text: str) -> None:
+    _inject(context, context.discord_thread, text, _author(username, name, user_id))
+
+
+@then('the bot has joined that thread')
+def step_bot_joined_thread(context: Context) -> None:
+    joined = lambda m: m["method"] == "joinThread"
+    deadline: float = time.time() + helpers.REPLY_TIMEOUT
+    while time.time() < deadline:
+        if any(joined(m) for m in helpers.discord_outbox(context.discord_thread)):
+            return
+        time.sleep(helpers.POLL_INTERVAL)
+    raise AssertionError(f"The bot never joined thread {context.discord_thread}")
+
+
 @then('no slash command reply is deleted in Discord channel "(?P<channel_id>\\d+)"')
 def step_no_reply_deleted(context: Context, channel_id: str) -> None:
     time.sleep(2)
