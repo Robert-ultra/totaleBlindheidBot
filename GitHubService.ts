@@ -1,8 +1,10 @@
 import { Bot } from 'node-telegram-bot-api';
 import GithubDAO from './dao/GithubDAO.js';
-import { escapeHtml } from './utils.js';
+import { blockquote, fmt, Formatted } from './format.js';
+import { toDiscordMarkdown } from './discord/markdown.js';
+import { broadcast } from './messenger.js';
 
-interface GitHubCommit {
+export interface GitHubCommit {
     sha: string;
     html_url: string;
     commit: {
@@ -20,6 +22,15 @@ interface GitHubCommit {
 const DEFAULT_REPO = 'RobinJ1995/totaleBlindheidBot';
 const DEFAULT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const DEFAULT_API_BASE = 'https://api.github.com';
+
+// Angle brackets keep Discord from embedding the link, like the disabled Telegram preview.
+export const commitTexts = (commit: GitHubCommit): { telegram: Formatted; discord: string } => {
+    const message: string = commit.commit.message || '';
+    return {
+        telegram: fmt`New commit: ${commit.html_url}\n${blockquote(message)}`,
+        discord: `New commit: <${commit.html_url}>\n${toDiscordMarkdown(blockquote(message))}`
+    };
+};
 
 class GitHubService {
     private bot: Bot;
@@ -107,32 +118,14 @@ class GitHubService {
         const ordered = [...newCommits].reverse();
 
         const chats = await this.dao.getGithubNotifyChats();
-        if (chats.length > 0) {
-            for (const commit of ordered) {
-                const text = this.formatCommit(commit);
-                for (const chatId of chats) {
-                    try {
-                        await this.bot.api.sendMessage({
-                            chat_id: chatId,
-                            text,
-                            parse_mode: 'HTML',
-                            link_preview_options: { is_disabled: true }
-                        });
-                    } catch (err) {
-                        console.error(`Failed to send GitHub notification to chat ${chatId}:`, err);
-                    }
-                }
+        for (const commit of ordered) {
+            const texts = commitTexts(commit);
+            for (const chatId of chats) {
+                await broadcast(this.bot, { chat_id: chatId }, texts.telegram, texts.discord, { linkPreview: false });
             }
         }
 
         await this.dao.setGithubLastSha(newestSha);
-    }
-
-    private formatCommit(commit: GitHubCommit): string {
-        const message = commit.commit.message || '';
-
-        return `New commit: ${escapeHtml(commit.html_url)}\n` +
-            `<blockquote expandable>${escapeHtml(message)}</blockquote>`;
     }
 }
 

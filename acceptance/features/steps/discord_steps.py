@@ -116,6 +116,13 @@ def step_channel_receives_bot_containing(context: Context, channel_id: str, text
     assert hits, f"Expected a bot message containing {text!r} in channel {channel_id}, got {[(m['method'], m['content']) for m in new]}"
 
 
+@then('Discord channel "(?P<channel_id>\\d+)" receives a bot message')
+def step_channel_receives_bot_message(context: Context, channel_id: str) -> None:
+    new: List[Dict[str, Any]] = _new_messages(context, channel_id, _is_bot_message)
+    hits = [m for m in new if _is_bot_message(m) and m["content"] == context.text]
+    assert hits, f"Expected the bot message {context.text!r} in channel {channel_id}, got {[(m['method'], m['content']) for m in new]}"
+
+
 @then('Discord channel "(?P<channel_id>\\d+)" receives nothing')
 def step_channel_receives_nothing(context: Context, channel_id: str) -> None:
     new: List[Dict[str, Any]] = helpers.discord_expect_no_new(channel_id, _baseline(context, channel_id))
