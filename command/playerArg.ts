@@ -1,6 +1,7 @@
 import { ExtendedMessage } from '../MessageRouter.js';
 import GameHistoryDAO, { ChatPlayer } from '../dao/GameHistoryDAO.js';
 import UserDAO from '../dao/UserDAO.js';
+import { parseDiscordRef } from '../discord/users.js';
 
 const userDao = new UserDAO();
 
@@ -29,6 +30,7 @@ export type PlayerMatch =
 // empty argument means the sender. A bare word is matched case-insensitively against each player's
 // display name or username; a leading @ makes it an explicit username reference, matched against
 // usernames only (so it can't be dragged into ambiguity by an unrelated player's display name).
+// discord:<username> likewise matches Discord usernames only.
 export const matchPlayerArgument = (
     players: ChatPlayer[],
     argument: string,
@@ -43,18 +45,14 @@ export const matchPlayerArgument = (
         return { kind: 'self' };
     }
 
+    const discordOnly: string | undefined = parseDiscordRef(trimmed);
     const usernameOnly = trimmed.startsWith('@');
-    const needle = (usernameOnly ? trimmed.slice(1) : trimmed).toLowerCase();
-    const byUser = new Map<number, ChatPlayer>();
-    for (const p of players) {
-        const nameHit = !usernameOnly && p.name.toLowerCase() === needle;
-        const usernameHit = p.username != null && p.username.toLowerCase() === needle;
-        if (nameHit || usernameHit) {
-            byUser.set(p.user_id, p);
-        }
-    }
+    const needle = discordOnly ?? (usernameOnly ? trimmed.slice(1) : trimmed).toLowerCase();
+    const matches: ChatPlayer[] = players.filter(p => discordOnly !== undefined
+        ? p.discord_username?.toLowerCase() === needle
+        : (!usernameOnly && (p.name.toLowerCase() === needle || p.discord_username?.toLowerCase() === needle))
+            || p.username?.toLowerCase() === needle);
 
-    const matches = [...byUser.values()];
     if (matches.length === 0) {
         return { kind: 'none', needle: trimmed };
     } else if (matches.length > 1) {

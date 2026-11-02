@@ -13,6 +13,7 @@ export interface ChatPlayer {
     user_id: number;
     name: string;
     username?: string;
+    discord_username?: string;
 }
 
 export interface GameHistoryEntry {
@@ -117,7 +118,7 @@ class GameHistoryDAO {
     // username. Ordered by name so any "matches multiple players" prompt reads predictably.
     async getChatPlayers(chat_id: number): Promise<ChatPlayer[]> {
         const rows = await query<RowDataPacket[]>(
-            'SELECT h.user_id, h.player_name, u.name AS tg_name, u.username AS tg_username ' +
+            'SELECT h.user_id, h.player_name, u.name AS tg_name, u.username AS tg_username, u.discord_username ' +
             'FROM game_history h ' +
             'LEFT JOIN user u ON u.id = h.user_id ' +
             'WHERE h.chat_id = :chat_id ' +
@@ -125,7 +126,7 @@ class GameHistoryDAO {
             { chat_id }
         );
 
-        interface Acc { user_id: number; playerName?: string; tgName?: string; username?: string; }
+        interface Acc { user_id: number; playerName?: string; tgName?: string; username?: string; discordUsername?: string; }
         const byUser = new Map<number, Acc>();
         for (const row of rows) {
             const user_id = Number(row.user_id);
@@ -144,12 +145,16 @@ class GameHistoryDAO {
             if (row.tg_username) {
                 acc.username = row.tg_username;
             }
+            if (row.discord_username) {
+                acc.discordUsername = row.discord_username;
+            }
         }
         return [...byUser.values()]
             .map(acc => ({
                 user_id: acc.user_id,
-                name: acc.playerName ?? acc.tgName ?? String(acc.user_id),
-                username: acc.username
+                name: acc.playerName ?? acc.tgName ?? acc.discordUsername ?? String(acc.user_id),
+                username: acc.username,
+                discord_username: acc.discordUsername
             }))
             .sort((a, b) => a.name.localeCompare(b.name));
     }
