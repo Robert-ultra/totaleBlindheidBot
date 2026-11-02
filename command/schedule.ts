@@ -54,9 +54,15 @@ export default (bot: Bot, cmd: Command): Promise<unknown> => {
                 })
                 .then(() => scheduleDao.setScheduledRollcall(chat_id, scheduledTime))
                 .then(() => rollcallPlayerDao.getRollcallPlayerUsernames(chat_id))
-                .then((rotation: string[]) => Promise.all([mentionUsers(rotation), presenceMarkers(rotation)])
-                    .then(([users, markers]) => ({ rotation, users, markers })))
-                .then(({ rotation, users, markers }) => {
+                .then(async (rotation: string[]) => {
+                    // Seed the initiator into the "yes" list.
+                    const entries: Record<string, RsvpEntry> = {};
+                    entries[user_id] = entryFromUser(cmd.user, 'yes');
+                    const { groups, tagged } = resolve(rotation, entries);
+                    const [users, markers] = await Promise.all([mentionUsers(tagged), presenceMarkers(tagged)]);
+                    return { entries, groups, tagged, users, markers };
+                })
+                .then(({ entries, groups, tagged, users, markers }) => {
                     const timeString: string = scheduledTime.toLocaleString('en-GB', {
                         timeZone: timezone,
                         year: 'numeric',
@@ -72,11 +78,6 @@ export default (bot: Bot, cmd: Command): Promise<unknown> => {
                     const scheduled: DateTime = DateTime.fromJSDate(scheduledTime);
                     const relative: string = scheduled.toRelative({ base: scheduled.minus({ minutes: Math.round(diffMinutes) }) })!;
 
-                    // Seed the initiator into the "yes" list.
-                    const entries: Record<string, RsvpEntry> = {};
-                    entries[user_id] = entryFromUser(cmd.user, 'yes');
-
-                    const { groups, tagged } = resolve(rotation, entries);
                     // Like a rollcall, the schedule tags the whole rotation up front. The
                     // mention line is baked in here so it records who was pinged when scheduled.
                     // Its 🟢/🟡/🔴/😶‍🌫️ presence markers are kept up to date for a while and then

@@ -54,6 +54,15 @@ test('resolve matches RSVP entries to rotation players by user id or username', 
     };
     assert.deepEqual(resolve(rotation, entries), {
         groups: { yes: ['Alice'], maybe: ['Eve'], no: ['@​carol'] },
-        tagged: ['[Alice](user:1)', 'Dave']
+        tagged: ['[Alice](user:1)', 'Dave', '[Eve](user:4)']
     });
+});
+
+test('people outside the rotation are tagged when they say yes or maybe, not when they say no', () => {
+    const entries = {
+        5: { user_id: 5, name: 'Finn', rsvp: 'yes' as const },
+        6: { user_id: 6, name: 'Gus', rsvp: 'maybe' as const },
+        7: { user_id: 7, name: 'Hal', rsvp: 'no' as const }
+    };
+    assert.deepEqual(resolve(['[Alice](user:1)'], entries).tagged, ['[Alice](user:1)', '[Finn](user:5)', '[Gus](user:6)']);
 });

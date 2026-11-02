@@ -216,11 +216,14 @@ def _new_messages(context: Context) -> List[Dict[str, Any]]:
 
 
 def _latest_message(context: Context) -> Dict[str, Any]:
+    """The newest message the bot sent; edits of older messages only count when nothing was sent."""
     new: List[Dict[str, Any]] = _new_messages(context)
     assert new, "Expected the bot to reply, but the outbox stayed empty"
-    context.last_message = new[-1]
-    context.last_reply = new[-1]["text"]
-    return new[-1]
+    sent: List[Dict[str, Any]] = [m for m in new if not m["method"].startswith(("edit", "delete", "setMessageReaction"))]
+    latest: Dict[str, Any] = (sent or new)[-1]
+    context.last_message = latest
+    context.last_reply = latest["text"]
+    return latest
 
 
 def _latest_reply(context: Context) -> str:

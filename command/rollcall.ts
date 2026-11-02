@@ -33,11 +33,9 @@ interface ExecuteRollcallOptions {
 const executeRollcall = (bot: Bot, target: Target, opts: ExecuteRollcallOptions = {}): Promise<Broadcast> => {
     const chat_id: number = target.chat_id;
     return Promise.all([
-        rollcallPlayerDao.getRollcallPlayerUsernames(chat_id)
-            .then(rotation => Promise.all([mentionUsers(rotation), presenceMarkers(rotation)])
-                .then(([users, markers]) => ({ rotation, users, markers }))),
+        rollcallPlayerDao.getRollcallPlayerUsernames(chat_id),
         opts.rsvp_id ? rsvpDao.getRsvpList(opts.rsvp_id) : Promise.resolve(undefined)
-    ]).then(([{ rotation, users, markers }, existing]) => {
+    ]).then(async ([rotation, existing]) => {
         // Inherit the shared list's entries when triggered by a schedule; otherwise seed
         // a fresh list with the initiator marked as joining.
         const entries: Record<string, RsvpEntry> = existing ? existing.entries : {};
@@ -46,6 +44,7 @@ const executeRollcall = (bot: Bot, target: Target, opts: ExecuteRollcallOptions 
         }
 
         const { groups, tagged } = resolve(rotation, entries);
+        const [users, markers] = await Promise.all([mentionUsers(tagged), presenceMarkers(tagged)]);
         // The ping line is baked in at send time: anyone who said "no" is dropped here. Its
         // 🟢/🟡/🔴/😶‍🌫️ presence markers (in CS2 / online / offline / unlinked) are kept up to date
         // for a while and then stripped, so the stored base leaves them out.
