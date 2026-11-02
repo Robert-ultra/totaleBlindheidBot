@@ -182,8 +182,12 @@ def inject_edited_message(text: str, chat_id: int, user: Dict[str, Any], message
         "date": int(time.time()),
         "edit_date": int(time.time()),
         "chat": {"id": int(chat_id), "type": "group", "title": f"Group {chat_id}"},
-        "from": {"id": int(user["id"]), "is_bot": False, "first_name": user.get("first_name", "Tester"),
-                 "username": user.get("username", "tester")},
+        "from": {
+            "id": int(user["id"]),
+            "is_bot": False,
+            "first_name": user.get("first_name", "Tester"),
+            "username": user.get("username", "tester"),
+        },
         "text": text,
     }
     requests.post(f"{TELEGRAM_MOCK_URL}/test/inject", json={"edited_message": edited}, timeout=5).raise_for_status()
