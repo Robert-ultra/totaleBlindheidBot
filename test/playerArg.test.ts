@@ -60,3 +60,21 @@ test('the same player matched by both name and username is not double-counted', 
     // user 3 matches "bobby" only by username; user 2 does not match, so this is unambiguous.
     assert.deepEqual(matchPlayerArgument(roster, 'bobby'), { kind: 'player', user_id: 3, name: 'Bob' });
 });
+
+const withDiscord: ChatPlayer[] = [
+    { user_id: 6, name: 'Kit', discord_username: 'kit_cs' },
+    { user_id: 7, name: 'Lee', username: 'kit_cs' },  // a Telegram username equal to another's Discord username
+];
+
+test('a bare word matches a Discord username too', () => {
+    assert.deepEqual(matchPlayerArgument([withDiscord[0]], 'KIT_CS'), { kind: 'player', user_id: 6, name: 'Kit' });
+});
+
+test('discord:<username> matches Discord usernames only', () => {
+    assert.deepEqual(matchPlayerArgument(withDiscord, 'discord:kit_cs'), { kind: 'player', user_id: 6, name: 'Kit' });
+    assert.deepEqual(matchPlayerArgument(withDiscord, 'discord:lee'), { kind: 'none', needle: 'discord:lee' });
+});
+
+test('@username still matches Telegram usernames only', () => {
+    assert.deepEqual(matchPlayerArgument(withDiscord, '@kit_cs'), { kind: 'player', user_id: 7, name: 'Lee' });
+});

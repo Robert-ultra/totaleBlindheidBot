@@ -240,3 +240,26 @@ Feature: linking Telegram and Discord users
       """
     When the user sends "/stats Kit"
     Then the bot reply starts with "Competitive stats for Kit"
+
+  Scenario: a Discord-only player's games are found under their Discord username
+    Given a chat with id 9014
+    And a user with id 9999 and first name "Admin"
+    And the user is an admin of the chat
+    And a Discord server "9014" named "Server" with channel "90141" named "general"
+    And Discord channel "90141" is linked to the chat
+    When Discord user "lux_cs" named "Lux" with id "901400000000000001" says "gl hf" in channel "90141"
+    Then the bot replies "lux_cs: gl hf"
+    When the user sends "/steam_user_id discord:lux_cs 76561198000009014"
+    Then the bot replies "Steam user ID(s) for lux_cs has been set to 76561198000009014"
+    When Steam mappings are refreshed
+    And Steam reports user "76561198000009014" playing CS2 as "Luxx" with score "13-9" on map "Nuke"
+    And Steam reports user "76561198000009014" stopped playing
+    Then chat 9014 eventually receives a new Steam message "🏆 Luxx won a game on Nuke (Competitive): 1️⃣3️⃣-9️⃣"
+    When the user sends "/game_history lux_cs"
+    Then the bot replies:
+      """
+      Game history for Luxx
+      🏆 Nuke · Competitive · 13-9
+      """
+    When the user sends "/stats discord:lux_cs"
+    Then the bot reply starts with "Competitive stats for Luxx"
