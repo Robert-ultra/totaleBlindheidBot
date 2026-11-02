@@ -59,8 +59,8 @@ def step_bot_edits_copy(context: Context, expected: str) -> None:
     deadline: float = time.time() + helpers.REPLY_TIMEOUT
     edits: List[str] = []
     while time.time() < deadline:
-        edits = [m["text"] for m in helpers.get_outbox(context.chat_id)[context.cmd_baseline:]
-                 if m["method"] in ("editMessageText", "editMessageCaption")]
+        outbox = helpers.get_outbox(context.chat_id)[context.cmd_baseline:]
+        edits = [m["text"] for m in outbox if m["method"] in ("editMessageText", "editMessageCaption")]
         if expected in edits:
             return
         time.sleep(helpers.POLL_INTERVAL)
