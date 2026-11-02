@@ -14,8 +14,9 @@ const discordMention = (mention: string, users: Record<number, User>): string =>
     return discord_id !== undefined ? `<@${discord_id}>` : toDiscordMarkdown({ text: parsed.display, entities: [] });
 };
 
-export const withDiscordTags = (head: Formatted, tags: string[], users: Record<number, User>): string =>
-    `${toDiscordMarkdown(head)}${tags.map(tag => discordMention(tag, users)).join(' ')}`;
+// `markers` are the tags' presence markers, keyed by rotation mention like on Telegram.
+export const withDiscordTags = (head: Formatted, tags: string[], users: Record<number, User>, markers: Record<string, string> = {}): string =>
+    `${toDiscordMarkdown(head)}${tags.map(tag => `${markers[tag] ?? ''}${discordMention(tag, users)}`).join(' ')}`;
 
 export const renderDiscordMessage = (base: string, groups: Record<Rsvp, string[]>): string => {
     const lists: string = renderLists(groups);

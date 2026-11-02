@@ -55,7 +55,7 @@ const executeRollcall = (bot: Bot, target: Target, opts: ExecuteRollcallOptions 
 
         return broadcast(bot, target,
             renderMessage(withTags(head, tagged, users, markers), groups),
-            renderDiscordMessage(discordBase, groups),
+            renderDiscordMessage(withDiscordTags(head, tagged, users, markers), groups),
             { keyboard: 'rollcall' }
         ).then((sent: Broadcast) => {
             const refs: RsvpMessageRef[] = [

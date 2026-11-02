@@ -16,7 +16,6 @@ import helpers
 
 use_step_matcher("re")
 
-PRESENCE_MARKERS: List[str] = ["🟢", "🟡", "🔴", "😶‍🌫️"]
 
 
 # ---------------------------------------------------------------------------
@@ -175,7 +174,7 @@ def step_remembered_edited_to_contain_and_not(context: Context, expected: str, u
 def step_remembered_edited_without_markers(context: Context, expected: str) -> None:
     _wait_for_remembered_edit(
         context,
-        lambda text: expected in text and not any(marker in text for marker in PRESENCE_MARKERS),
+        lambda text: expected in text and not any(marker in text for marker in helpers.PRESENCE_MARKERS),
         f"to contain {expected!r} without a presence marker",
     )
 

@@ -315,6 +315,12 @@ def step_discord_edited_contains(context: Context, text: str) -> None:
     _wait_for_discord_edit(context, lambda m: text in m["content"], f"to contain {text!r}")
 
 
+@then('the remembered Discord message is edited to contain "(?P<text>[^"]+)" without a presence marker')
+def step_discord_edited_without_markers(context: Context, text: str) -> None:
+    matches = lambda m: text in m["content"] and not any(marker in m["content"] for marker in helpers.PRESENCE_MARKERS)
+    _wait_for_discord_edit(context, matches, f"to contain {text!r} without a presence marker")
+
+
 @then('the remembered Discord message is edited to contain "(?P<text>[^"]+)" without buttons')
 def step_discord_edited_without_buttons(context: Context, text: str) -> None:
     _wait_for_discord_edit(context, lambda m: text in m["content"] and not helpers.discord_button_labels(m), f"to contain {text!r} without buttons")
