@@ -193,6 +193,10 @@ class DiscordService {
         this.slashCommands = commands;
     }
 
+    async unregisterCommands(guild_id: string): Promise<void> {
+        await this.client.application?.commands.set([], guild_id);
+    }
+
     // Guild commands apply at once; global ones would take an hour.
     async registerCommands(guild_id: string): Promise<void> {
         if (!this.client.application) {

@@ -252,6 +252,18 @@ def step_discord_runs_with(context: Context, username: str, name: str, user_id: 
     helpers.discord_run_command(channel_id, _author(username, name, user_id), command, {"name": option, "value": value})
 
 
+@then('Discord server "(?P<guild_id>\\d+)" offers the "/(?P<name>[a-z_]+)" slash command')
+def step_slash_command_offered(context: Context, guild_id: str, name: str) -> None:
+    registered: List[str] = helpers.discord_commands().get(guild_id, [])
+    assert name in registered, f"Expected /{name} among the slash commands of server {guild_id}, got {registered}"
+
+
+@then('Discord server "(?P<guild_id>\\d+)" offers no slash commands')
+def step_no_slash_commands(context: Context, guild_id: str) -> None:
+    registered: List[str] = helpers.discord_commands().get(guild_id, [])
+    assert registered == [], f"Expected no slash commands in server {guild_id}, got {registered}"
+
+
 @then('Discord server "(?P<guild_id>\\d+)" offers the slash commands "(?P<names>[^"]*)"')
 def step_slash_commands(context: Context, guild_id: str, names: str) -> None:
     expected: List[str] = sorted(n.strip() for n in names.split(","))

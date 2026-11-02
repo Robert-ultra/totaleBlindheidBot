@@ -93,6 +93,34 @@ Feature: linking Discord channels to a Telegram group
     When the user sends "/unlink_chat"
     Then the bot replies "No Discord channels are linked to this group."
 
+  Scenario: unlinking a server's last channel removes its slash commands
+    Given a chat with id 7041
+    And a user with id 7141 and first name "Admin"
+    And the user is an admin of the chat
+    And a Discord server "7041" named "Two Rooms" with channels "70411" named "general" and "70412" named "cs"
+    And Discord channel "70411" is linked to the chat
+    And Discord channel "70412" is linked to the chat
+    Then Discord server "7041" offers the "/rollcall" slash command
+    When the user sends "/unlink_chat 70411"
+    Then the bot replies "Unlinked Discord channel 70411."
+    And Discord server "7041" offers the "/rollcall" slash command
+    When the user sends "/unlink_chat 70412"
+    Then the bot replies "Unlinked Discord channel 70412."
+    And Discord server "7041" offers no slash commands
+
+  Scenario: unlinking every channel removes the slash commands of each server
+    Given a chat with id 7042
+    And a user with id 7142 and first name "Admin"
+    And the user is an admin of the chat
+    And a Discord server "7042" named "Server One" with channel "70421" named "general"
+    And a Discord server "7043" named "Server Two" with channel "70431" named "cs"
+    And Discord channel "70421" is linked to the chat
+    And Discord channel "70431" is linked to the chat
+    When the user sends "/unlink_chat"
+    Then the bot replies "Unlinked 2 Discord channels."
+    And Discord server "7042" offers no slash commands
+    And Discord server "7043" offers no slash commands
+
   Scenario: only an admin can unlink
     Given a chat with id 7012
     And a user with id 7112 and first name "Member"

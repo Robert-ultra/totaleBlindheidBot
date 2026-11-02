@@ -10,9 +10,14 @@ const chatLinkDao = new ChatLinkDAO();
 
 export const UNLINKED_NOTICE = 'This channel is no longer linked to Telegram.';
 
-// Discord-side failures (kicked, lost permissions) don't stop the unlink.
+// Discord-side failures (kicked, lost permissions) don't stop the unlink. A server left without
+// linked channels loses its slash commands.
 const tearDown = async (discord: DiscordService, link: ChatLink): Promise<void> => {
     await chatLinkDao.removeLink(link.telegram_chat_id, link.discord_channel_id);
+    if (!(await chatLinkDao.getAllLinks()).some(other => other.discord_guild_id === link.discord_guild_id)) {
+        await discord.unregisterCommands(link.discord_guild_id)
+            .catch((err: Error) => console.error(`Could not remove the slash commands of Discord server ${link.discord_guild_id}:`, err));
+    }
     if (link.webhook_id && link.webhook_token) {
         await discord.deleteWebhook({ id: link.webhook_id, token: link.webhook_token })
             .catch((err: Error) => console.error(`Could not delete webhook ${link.webhook_id}:`, err));
