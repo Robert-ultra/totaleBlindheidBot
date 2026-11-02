@@ -97,3 +97,36 @@ Feature: scheduling rollcalls across Telegram and Discord
       """
       Scheduled rollcall cancelled.
       """
+
+  Scenario: a Discord user sets their timezone on Discord and schedules in it
+    When Discord user "hana_cs" named "Hana" with id "101010000000000008" runs "/timezone" in channel "101011"
+    Then Discord channel "101011" receives a bot message
+      """
+      Your current timezone is UTC
+      """
+    When Discord user "hana_cs" named "Hana" with id "101010000000000008" runs "/timezone" with timezone "UTC+2" in channel "101011"
+    Then Discord channel "101011" receives a bot message
+      """
+      Your timezone has been set to +02:00
+      """
+    And the bot sends no reply
+    When Discord user "hana_cs" named "Hana" with id "101010000000000008" runs "/schedule" with time "3 hours" in channel "101011"
+    Then the bot reply starts with "Rollcall scheduled for"
+    And the bot reply contains "GMT+2"
+    And Discord channel "101021" receives a bot message containing "GMT+2" with buttons "I'm in, Maybe, No"
+    When Discord user "hana_cs" named "Hana" with id "101010000000000008" runs "/cancel" in channel "101011"
+    Then the bot replies "Scheduled rollcall cancelled."
+
+  Scenario: a timezone set on Discord carries over when the person is linked
+    Given the user is an admin of the chat
+    When Discord user "ivo_cs" named "Ivo" with id "101010000000000009" runs "/timezone" with timezone "Dublin" in channel "101011"
+    Then Discord channel "101011" receives a bot message
+      """
+      Your timezone has been set to Europe/Dublin
+      """
+    When user 11103 sends "/hi"
+    Then the bot replies "Hello to you too, User11103!"
+    When the user sends "/link_user @user11103 discord:ivo_cs"
+    Then the bot replies "Linked User11103 to Discord user ivo_cs."
+    When user 11103 sends "/timezone"
+    Then the bot replies "Your current timezone is Europe/Dublin"

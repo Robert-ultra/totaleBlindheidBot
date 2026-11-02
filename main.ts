@@ -231,7 +231,8 @@ router.route('cancel', cancelHandler, {
     discord: {}
 });
 router.route('timezone', timezoneHandler, {
-    helpText: 'Set or view your timezone for rollcall scheduling.'
+    helpText: 'Set or view your timezone for rollcall scheduling.',
+    discord: { argument: { name: 'timezone', description: 'e.g. "Europe/Dublin", "Dublin", "UTC+2" or "CET". Leave empty to see yours.' } }
 });
 router.route('wingman', wingmanHandler, {
     helpText: 'Looking for a wingman?',

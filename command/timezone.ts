@@ -1,29 +1,27 @@
 import { Bot } from 'node-telegram-bot-api';
-import { ExtendedMessage } from '../MessageRouter.js';
+import { Command } from '../MessageRouter.js';
 import UserDAO from '../dao/UserDAO.js';
 import { formatError } from '../utils.js';
 import { normaliseTimezone } from '../timeUtils.js';
 
 const dao = new UserDAO();
 
-export default (bot: Bot, msg: ExtendedMessage): void => {
-    const argument: string | undefined = msg.command?.argument;
-    const user_id: number = msg.user.id;
+export default (bot: Bot, cmd: Command): Promise<unknown> => {
+    const argument: string = cmd.command.argument;
+    const user_id: number = cmd.user.id;
 
     if (!argument) {
-        dao.getUserTimezone(user_id)
-            .then((timezone: string) => msg.reply(`Your current timezone is ${timezone}`))
-            .catch((err: Error) => msg.reply(formatError(err)));
-        return;
+        return dao.getUserTimezone(user_id)
+            .then((timezone: string) => cmd.reply(`Your current timezone is ${timezone}`))
+            .catch((err: Error) => cmd.reply(formatError(err)));
     }
 
     const normalisedTz: string | null = normaliseTimezone(argument);
     if (!normalisedTz) {
-        msg.reply(`Invalid timezone: ${argument}`);
-        return;
+        return cmd.reply(`Invalid timezone: ${argument}`);
     }
 
-    dao.setUserTimezone(user_id, normalisedTz)
-        .then(() => msg.reply(`Your timezone has been set to ${normalisedTz}`))
-        .catch((err: Error) => msg.reply(formatError(err)));
+    return dao.setUserTimezone(user_id, normalisedTz)
+        .then(() => cmd.reply(`Your timezone has been set to ${normalisedTz}`))
+        .catch((err: Error) => cmd.reply(formatError(err)));
 };
