@@ -15,7 +15,7 @@ import DiscordService, { SlashCommand } from './discord/DiscordService.js';
 import { toDiscordMarkdown } from './discord/markdown.js';
 import ChatLinkDAO, { ChatLink } from './dao/ChatLinkDAO.js';
 import { asFormatted, Part } from './format.js';
-import { recordDiscordSender, relayFromDiscord, relayFromTelegram } from './relay.js';
+import { recordDiscordSender, relayDiscordEdit, relayFromDiscord, relayFromTelegram, relayTelegramEdit } from './relay.js';
 import { executeRollcall } from './command/rollcall.js';
 import MessageRouter, { ExtendedMessage } from './MessageRouter.js';
 import { Rsvp } from './dao/RsvpDAO.js';
@@ -131,6 +131,7 @@ const discordService: DiscordService | null = process.env.DISCORD_BOT_TOKEN ? ne
 const chatLinkDao = new ChatLinkDAO();
 discordService?.onMessage(recordDiscordSender);
 discordService?.onMessage((message, link) => relayFromDiscord(bot, message, link));
+discordService?.onEdit((message, link) => relayDiscordEdit(bot, message, link));
 
 // The interaction must be acknowledged quickly; a broadcasting handler's channel copy becomes
 // that answer, anything said after it a follow-up.
@@ -325,6 +326,10 @@ bot.on('message', (ctx: Context) => {
             relayFromTelegram(bot, msg).catch((err: Error) => console.error('Error relaying Telegram message:', err));
         })
         .catch((err: Error) => console.error('Error recording message sender:', err));
+});
+
+bot.on('edited_message', (ctx: Context) => {
+    relayTelegramEdit(ctx.editedMessage!).catch((err: Error) => console.error('Error relaying Telegram edit:', err));
 });
 
 bot.on('callback_query', (ctx: Context) => {

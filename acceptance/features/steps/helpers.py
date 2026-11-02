@@ -172,7 +172,21 @@ def inject_message(
         f"{TELEGRAM_MOCK_URL}/test/inject", json=message, timeout=5
     )
     resp.raise_for_status()
-    return resp.json()
+    return {**resp.json(), "message_id": message["message_id"]}
+
+
+def inject_edited_message(text: str, chat_id: int, user: Dict[str, Any], message_id: int) -> None:
+    """Deliver an edit of a message the user sent earlier."""
+    edited: Dict[str, Any] = {
+        "message_id": message_id,
+        "date": int(time.time()),
+        "edit_date": int(time.time()),
+        "chat": {"id": int(chat_id), "type": "group", "title": f"Group {chat_id}"},
+        "from": {"id": int(user["id"]), "is_bot": False, "first_name": user.get("first_name", "Tester"),
+                 "username": user.get("username", "tester")},
+        "text": text,
+    }
+    requests.post(f"{TELEGRAM_MOCK_URL}/test/inject", json={"edited_message": edited}, timeout=5).raise_for_status()
 
 
 def register_file(file_id: str, content: Optional[bytes], content_type: Optional[str] = None) -> None:
@@ -433,6 +447,10 @@ def discord_define_guild(
     if members is not None:
         body["members"] = members
     requests.post(f"{DISCORD_MOCK_URL}/test/guilds", json=body, timeout=5).raise_for_status()
+
+
+def discord_edit(message_id: str, content: str) -> None:
+    requests.post(f"{DISCORD_MOCK_URL}/test/edit", json={"message_id": message_id, "content": content}, timeout=5).raise_for_status()
 
 
 def discord_inject(channel_id: str, content: str, author: Dict[str, Any], **extra: Any) -> Dict[str, Any]:

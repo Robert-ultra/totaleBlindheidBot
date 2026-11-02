@@ -11,6 +11,8 @@ import {
     Interaction,
     Message,
     MessageFlags,
+    PartialMessage,
+    Partials,
     PermissionFlagsBits,
     PermissionsBitField,
     RESTOptions,
@@ -23,6 +25,7 @@ import { splitMessage } from './markdown.js';
 import { Rsvp } from '../dao/RsvpDAO.js';
 import { RsvpKeyboardKind, rsvpLabels } from '../rsvp.js';
 import { RelayFile } from '../media.js';
+import { CopyKind } from '../dao/RelayedMessageDAO.js';
 
 // Names as Discord shows them, for telling an admin what is missing.
 const REQUIRED_PERMISSIONS: { flag: bigint; name: string }[] = [
@@ -48,7 +51,10 @@ export interface Webhook {
 const sanitizeWebhookName = (name: string): string =>
     name.replace(/discord/gi, 'didi').replace(/clyde/gi, 'dada').slice(0, 80) || 'someone';
 
+const botRelayText = (author: string, content: string): string => content ? `**${author}:** ${content}` : `**${author}:**`;
+
 export type DiscordMessageHandler = (message: Message, link: ChatLink) => Promise<void>;
+export type DiscordEditHandler = (message: Message | PartialMessage, link: ChatLink) => Promise<void>;
 export type DiscordCommandHandler = (interaction: ChatInputCommandInteraction, link: ChatLink) => Promise<void>;
 export type DiscordButtonHandler = (interaction: ButtonInteraction, link: ChatLink) => Promise<void>;
 
@@ -75,6 +81,7 @@ class DiscordService {
     private chatLinkDao: ChatLinkDAO = new ChatLinkDAO();
     private webhookClients: Map<string, WebhookClient> = new Map();
     private messageHandlers: DiscordMessageHandler[] = [];
+    private editHandlers: DiscordEditHandler[] = [];
     private commandHandlers: DiscordCommandHandler[] = [];
     private buttonHandlers: DiscordButtonHandler[] = [];
     private slashCommands: SlashCommand[] = [];
@@ -87,12 +94,17 @@ class DiscordService {
         };
         this.client = new Client({
             intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
+            // Edits to messages from before a restart arrive uncached.
+            partials: [Partials.Message],
             rest: this.restOptions
         });
         this.client.on('clientReady', () => console.log(`Logged on to Discord as ${this.client.user?.tag}`));
         this.client.on('error', (err: Error) => console.error('Discord client error:', err));
         this.client.on('messageCreate', (message: Message) => {
             this.handleMessage(message).catch((err: Error) => console.error('Error handling Discord message:', err));
+        });
+        this.client.on('messageUpdate', (_old, message) => {
+            this.handleEdit(message).catch((err: Error) => console.error('Error handling Discord edit:', err));
         });
         this.client.on('interactionCreate', (interaction: Interaction) => {
             this.handleInteraction(interaction).catch((err: Error) => console.error('Error handling Discord interaction:', err));
@@ -112,6 +124,10 @@ class DiscordService {
 
     onMessage(handler: DiscordMessageHandler): void {
         this.messageHandlers.push(handler);
+    }
+
+    onEdit(handler: DiscordEditHandler): void {
+        this.editHandlers.push(handler);
     }
 
     onCommand(handler: DiscordCommandHandler): void {
@@ -166,6 +182,18 @@ class DiscordService {
             return;
         }
         await Promise.all(this.messageHandlers.map(handler => handler(message, link)));
+    }
+
+    // Embeds resolving also update a message; only a real edit carries an edit time.
+    private async handleEdit(message: Message | PartialMessage): Promise<void> {
+        if (!message.editedTimestamp || message.author?.id === this.client.user?.id) {
+            return;
+        }
+        const link: ChatLink | undefined = await this.chatLinkDao.getLinkByChannel(message.channelId);
+        if (!link || (message.webhookId && message.webhookId === link.webhook_id)) {
+            return;
+        }
+        await Promise.all(this.editHandlers.map(handler => handler(message, link)));
     }
 
     private async fetchGuildTextChannel(channel_id: string): Promise<GuildTextBasedChannel | null | undefined> {
@@ -275,20 +303,29 @@ class DiscordService {
         });
     }
 
-    async relay(link: ChatLink, author: string, content: string, files: RelayFile[] = []): Promise<void> {
+    // Returns the (last) message sent and how, so it can be edited later.
+    async relay(link: ChatLink, author: string, content: string, files: RelayFile[] = []): Promise<{ message_id: string; kind: CopyKind }> {
         const attachments = files.map(file => ({ attachment: file.data, name: file.name }));
         if (link.webhook_id && link.webhook_token) {
             const webhook = this.webhookClient({ id: link.webhook_id, token: link.webhook_token });
             const chunks: string[] = content ? splitMessage(content) : [''];
-            await chunks.reduce<Promise<unknown>>((sending, chunk, i) => sending.then(() => webhook.send({
+            const message_id: string = await chunks.reduce((sending: Promise<string>, chunk: string, i: number) => sending.then(() => webhook.send({
                 content: chunk,
                 username: sanitizeWebhookName(author),
                 allowedMentions: { parse: ['users'] },
                 ...(i === chunks.length - 1 ? { files: attachments } : {})
-            })), Promise.resolve());
-            return;
+            })).then(sent => sent.id), Promise.resolve(''));
+            return { message_id, kind: 'webhook' };
         }
-        await this.sendAsBot(link.discord_channel_id, content ? `**${author}:** ${content}` : `**${author}:**`, undefined, attachments);
+        return { message_id: await this.sendAsBot(link.discord_channel_id, botRelayText(author, content), undefined, attachments), kind: 'bot' };
+    }
+
+    async editRelayed(link: ChatLink, message_id: string, kind: CopyKind, author: string, content: string): Promise<void> {
+        if (kind === 'webhook' && link.webhook_id && link.webhook_token) {
+            await this.webhookClient({ id: link.webhook_id, token: link.webhook_token }).editMessage(message_id, { content: splitMessage(content)[0] });
+        } else if (kind === 'bot') {
+            await this.editMessage(link.discord_channel_id, message_id, botRelayText(author, content));
+        }
     }
 }
 

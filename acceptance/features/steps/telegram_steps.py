@@ -45,7 +45,26 @@ def _send(
 ) -> None:
     context.cmd_chat = context.chat_id
     context.cmd_baseline = len(helpers.get_outbox(context.chat_id))
-    helpers.inject_message(text, context.chat_id, user, entities=entities, reply_to_message_id=reply_to_message_id)
+    context.last_sent_message_id = helpers.inject_message(text, context.chat_id, user, entities=entities, reply_to_message_id=reply_to_message_id)["message_id"]
+
+
+@when('the user edits that message to "(?P<text>[^"]*)"')
+def step_user_edits(context: Context, text: str) -> None:
+    context.cmd_baseline = len(helpers.get_outbox(context.chat_id))
+    helpers.inject_edited_message(text, context.chat_id, context.user, context.last_sent_message_id)
+
+
+@then('the bot edits its copy to "(?P<expected>[^"]*)"')
+def step_bot_edits_copy(context: Context, expected: str) -> None:
+    deadline: float = time.time() + helpers.REPLY_TIMEOUT
+    edits: List[str] = []
+    while time.time() < deadline:
+        edits = [m["text"] for m in helpers.get_outbox(context.chat_id)[context.cmd_baseline:]
+                 if m["method"] in ("editMessageText", "editMessageCaption")]
+        if expected in edits:
+            return
+        time.sleep(helpers.POLL_INTERVAL)
+    raise AssertionError(f"Expected the bot to edit its copy to {expected!r}; edits: {edits}")
 
 
 @when('the user sends "(?P<text>[^"]*)"')
