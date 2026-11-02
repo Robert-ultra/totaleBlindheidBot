@@ -15,7 +15,7 @@ import DiscordService, { SlashCommand } from './discord/DiscordService.js';
 import { toDiscordMarkdown } from './discord/markdown.js';
 import ChatLinkDAO, { ChatLink } from './dao/ChatLinkDAO.js';
 import { asFormatted, Part } from './format.js';
-import { recordDiscordSender, relayDiscordEdit, relayFromDiscord, relayFromTelegram, relayTelegramEdit } from './relay.js';
+import { recordDiscordSender, relayDiscordDeletion, relayDiscordEdit, relayFromDiscord, relayFromTelegram, relayTelegramEdit } from './relay.js';
 import { executeRollcall } from './command/rollcall.js';
 import MessageRouter, { ExtendedMessage } from './MessageRouter.js';
 import { Rsvp } from './dao/RsvpDAO.js';
@@ -132,6 +132,7 @@ const chatLinkDao = new ChatLinkDAO();
 discordService?.onMessage(recordDiscordSender);
 discordService?.onMessage((message, link) => relayFromDiscord(bot, message, link));
 discordService?.onEdit((message, link) => relayDiscordEdit(bot, message, link));
+discordService?.onDelete((channel_id, message_id, link) => relayDiscordDeletion(bot, channel_id, message_id, link));
 
 // The interaction must be acknowledged quickly; a broadcasting handler's channel copy becomes
 // that answer, anything said after it a follow-up.

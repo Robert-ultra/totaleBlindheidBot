@@ -453,6 +453,10 @@ def discord_edit(message_id: str, content: str) -> None:
     requests.post(f"{DISCORD_MOCK_URL}/test/edit", json={"message_id": message_id, "content": content}, timeout=5).raise_for_status()
 
 
+def discord_delete(message_id: str) -> None:
+    requests.post(f"{DISCORD_MOCK_URL}/test/delete", json={"message_id": message_id}, timeout=5).raise_for_status()
+
+
 def discord_inject(channel_id: str, content: str, author: Dict[str, Any], **extra: Any) -> Dict[str, Any]:
     body: Dict[str, Any] = {"channel_id": channel_id, "content": content, "author": author, **extra}
     resp = requests.post(f"{DISCORD_MOCK_URL}/test/inject", json=body, timeout=5)

@@ -100,6 +100,29 @@ const editDiscordCopies = async (discord: DiscordService, telegram_chat_id: numb
     }));
 };
 
+// Deleting the original deletes its copies everywhere. Deleting a copy only forgets it: the bot
+// does not delete people's messages for them. Telegram tells bots nothing about deletions.
+export const relayDiscordDeletion = async (bot: Bot, channel_id: string, message_id: string, link: ChatLink): Promise<void> => {
+    const discord: DiscordService | null = DiscordService.instance;
+    const deleted: RelayedMessage | undefined = await relayedDao.find({ platform: 'discord', chat_id: channel_id, message_id });
+    if (!discord || !deleted) {
+        return;
+    } else if (deleted.kind !== 'origin') {
+        await relayedDao.forget([deleted.id]);
+        return;
+    }
+    const group: RelayedMessage[] = await relayedDao.group(deleted);
+    const links: ChatLink[] = await chatLinkDao.getLinks(link.telegram_chat_id);
+    await Promise.all(group.slice(1).map(copy => {
+        const other: ChatLink | undefined = links.find(l => l.discord_channel_id === copy.chat_id);
+        const removal: Promise<unknown> = copy.platform === 'telegram'
+            ? bot.api.deleteMessage({ chat_id: Number(copy.chat_id), message_id: Number(copy.message_id) })
+            : other ? discord.deleteRelayed(other, copy.message_id, copy.kind as CopyKind) : Promise.resolve();
+        return removal.catch((err: Error) => console.error(`Could not delete relayed message ${copy.message_id} in ${copy.platform} ${copy.chat_id}:`, err));
+    }));
+    await relayedDao.forget(group.map(message => message.id));
+};
+
 export const relayTelegramEdit = async (msg: TelegramMessage): Promise<void> => {
     const discord: DiscordService | null = DiscordService.instance;
     const relayed = discord ? await copiesOf(telegramRef(msg)) : undefined;

@@ -136,6 +136,12 @@ def bot_api(token: str, method: str) -> Response:
                 "text": text,
             },
         })
+    elif method == "deleteMessage":
+        with _lock:
+            chat_id = params.get("chat_id")
+            _outbox.append({"method": "deleteMessage", "chat_id": str(chat_id) if chat_id is not None else None,
+                            "message_id": _maybe_int(params.get("message_id")), "text": "", "params": params})
+        return jsonify({"ok": True, "result": True})
     elif method == "editMessageCaption":
         with _lock:
             chat_id = params.get("chat_id")
