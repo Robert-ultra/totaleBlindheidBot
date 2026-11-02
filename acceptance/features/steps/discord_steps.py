@@ -65,7 +65,20 @@ def step_channel_linked(context: Context, channel_id: str) -> None:
 def _inject(context: Context, channel_id: str, content: str, author: Dict[str, Any], **extra: Any) -> None:
     context.cmd_chat = context.chat_id
     context.cmd_baseline = len(helpers.get_outbox(context.chat_id))
-    helpers.discord_inject(channel_id, content, author, **extra)
+    context.discord_last_sent_id = helpers.discord_inject(channel_id, content, author, **extra)["message_id"]
+
+
+@when('that Discord message is edited to "(?P<text>[^"]*)"')
+def step_discord_message_edited(context: Context, text: str) -> None:
+    context.cmd_baseline = len(helpers.get_outbox(context.chat_id))
+    helpers.discord_edit(context.discord_last_sent_id, text)
+
+
+@then('Discord channel "(?P<channel_id>\\d+)" sees its copy edited to "(?P<text>[^"]*)"')
+def step_channel_copy_edited(context: Context, channel_id: str, text: str) -> None:
+    is_edit = lambda m: m["method"] in ("editWebhookMessage", "editMessage") and m["content"] == text
+    new: List[Dict[str, Any]] = _new_messages(context, channel_id, is_edit)
+    assert any(is_edit(m) for m in new), f"Expected a copy in channel {channel_id} edited to {text!r}, got {_describe(new)}"
 
 
 @when('Discord user "(?P<username>[^"]*)" named "(?P<name>[^"]*)" with id "(?P<user_id>\\d+)" says "(?P<text>[^"]*)" in channel "(?P<channel_id>\\d+)"')

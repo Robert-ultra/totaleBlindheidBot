@@ -53,6 +53,7 @@ _lock = threading.Lock()
 _guilds: Dict[str, Dict[str, Any]] = {}      # guild id -> {"id", "name", "channels": {id: channel}, "permissions": int, "members": {user id: user}}
 _webhooks: Dict[str, Dict[str, Any]] = {}    # webhook id -> webhook object (with token)
 _outbox: List[Dict[str, Any]] = []           # everything the bot posted, in order
+_messages: Dict[str, Dict[str, Any]] = {}    # message id -> message object, for edits and deletions
 _ids = itertools.count(100000000000000001)   # snowflake-ish ids for messages and webhooks
 
 _loop: Optional[asyncio.AbstractEventLoop] = None
@@ -169,7 +170,18 @@ def _message_object(channel_id: str, guild_id: Optional[str], content: str, auth
         message["member"] = member or {"nick": None, "roles": [], "joined_at": _now(), "deaf": False, "mute": False, "flags": 0}
     if webhook_id is not None:
         message["webhook_id"] = webhook_id
+    _messages[message["id"]] = message
     return message
+
+
+def _edited(message_id: str, content: str) -> Optional[Dict[str, Any]]:
+    """Apply an edit to a known message, returning the updated message to dispatch."""
+    message = _messages.get(message_id)
+    if message is None:
+        return None
+    message["content"] = content
+    message["edited_timestamp"] = _now()
+    return dict(message)
 
 
 def _find_channel(channel_id: str):
@@ -365,7 +377,7 @@ def edit_message(channel_id: str, message_id: str) -> Response:
         guild, channel = _find_channel(channel_id)
         if not channel:
             return _error(404, 10003, "Unknown Channel")
-        message = _message_object(channel_id, guild["id"], body.get("content", ""), BOT_USER)
+        message = _edited(message_id, body.get("content", "")) or _message_object(channel_id, guild["id"], body.get("content", ""), BOT_USER)
         message["id"] = message_id
         _outbox.append({
             "method": "editMessage",
@@ -376,6 +388,7 @@ def edit_message(channel_id: str, message_id: str) -> Response:
             "attachments": [],
             "params": body,
         })
+    _dispatch("MESSAGE_UPDATE", message)
     return jsonify(message)
 
 
@@ -456,6 +469,29 @@ def execute_webhook(webhook_id: str, token: str) -> Response:
         })
     # Webhook messages reach the gateway like any other message in the channel.
     _dispatch("MESSAGE_CREATE", message)
+    return jsonify(message)
+
+
+@app.route("/api/v10/webhooks/<webhook_id>/<token>/messages/<message_id>", methods=["PATCH"])
+def edit_webhook_message(webhook_id: str, token: str, message_id: str) -> Response:
+    body = _body()
+    with _lock:
+        webhook = _webhooks.get(webhook_id)
+        if not webhook or webhook["token"] != token:
+            return _error(404, 10015, "Unknown Webhook")
+        message = _edited(message_id, body.get("content", ""))
+        if message is None:
+            return _error(404, 10008, "Unknown Message")
+        _outbox.append({
+            "method": "editWebhookMessage",
+            "channel_id": webhook["channel_id"],
+            "message_id": message_id,
+            "content": message["content"],
+            "username": None,
+            "attachments": [],
+            "params": body,
+        })
+    _dispatch("MESSAGE_UPDATE", message)
     return jsonify(message)
 
 
@@ -663,6 +699,18 @@ def inject_message() -> Response:
     return jsonify({"ok": True, "message_id": message["id"]})
 
 
+@app.route("/test/edit", methods=["POST"])
+def edit_injected() -> Response:
+    """A Discord user edits a message they sent earlier."""
+    body = request.get_json(force=True) or {}
+    with _lock:
+        message = _edited(body["message_id"], body["content"])
+    if message is None:
+        return _error(404, 10008, "Unknown Message")
+    _dispatch("MESSAGE_UPDATE", message)
+    return jsonify({"ok": True})
+
+
 def _interaction_base(body: Dict[str, Any]) -> Dict[str, Any]:
     guild, channel = _find_channel(body["channel_id"])
     user = {"discriminator": "0", "avatar": None, "bot": False, "global_name": None, **body["user"]}
@@ -763,6 +811,7 @@ def reset() -> Response:
     with _lock:
         _outbox.clear()
         _files.clear()
+        _messages.clear()
     return jsonify({"ok": True})
 
 
