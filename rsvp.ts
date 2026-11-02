@@ -2,7 +2,7 @@ import { InlineKeyboardMarkup } from 'node-telegram-bot-api';
 import { fmt, Formatted, link, Part } from './format.js';
 import { Rsvp, RsvpEntry } from './dao/RsvpDAO.js';
 import { User, userDisplayName } from './dao/UserDAO.js';
-import { displayName, parseMention } from './mention.js';
+import { displayName, parseMention, userMention } from './mention.js';
 
 export type RsvpKeyboardKind = 'schedule' | 'rollcall';
 
@@ -89,7 +89,7 @@ const resolve = (rotation: string[], entries: Record<string, RsvpEntry>): RsvpGr
         if (matched) {
             matched.rsvp = entry.rsvp;
         } else {
-            people.push({ rsvp: entry.rsvp, name: entry.name });
+            people.push({ rsvp: entry.rsvp, name: entry.name, mention: userMention(entry.user_id, entry.name) });
         }
     });
 
@@ -100,7 +100,7 @@ const resolve = (rotation: string[], entries: Record<string, RsvpEntry>): RsvpGr
         if (person.rsvp) {
             groups[person.rsvp].push(displayName(person.name));
         }
-        // Tag every rotation player except those who explicitly opted out.
+        // Tag every rotation player who didn't opt out, and everyone else who said yes or maybe.
         if (person.mention && person.rsvp !== 'no') {
             tagged.push(person.mention);
         }
