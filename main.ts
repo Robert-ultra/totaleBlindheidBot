@@ -257,7 +257,8 @@ router.route('unlink_user', unlinkUserHandler, {
 if (steamEnabled) {
     router.onReply(handleSteamIdReply);
     router.route('steam_user_id', steamUserIdHandler, {
-        helpText: 'Set your Steam user ID(s) for live game updates. Either single ID or comma-separated. Admin: /steam_user_id @user <id(s)>, /steam_user_id discord:<username> <id(s)>, or no arguments to pick a user.'
+        helpText: 'Set your Steam user ID(s) for live game updates. Either single ID or comma-separated. Admin: /steam_user_id @user <id(s)>, /steam_user_id discord:<username> <id(s)>, or no arguments to pick a user.',
+        discord: { argument: { name: 'ids', description: 'Your SteamID64(s), the 17-digit number starting with 7656, comma-separated.' } }
     });
     router.route('steam_updates', steamUpdatesHandler, {
         helpText: 'Enable or disable Steam updates for this chat (on/off).'
