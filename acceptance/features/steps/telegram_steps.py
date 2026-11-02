@@ -4,6 +4,7 @@ These use behave's regex matcher (which anchors patterns at both ends) so the
 generic "the user sends ..." step does not greedily swallow the more specific
 mention variants.
 """
+import json
 import re
 import time
 from typing import Any, Dict, List, Optional, Tuple
@@ -46,12 +47,37 @@ def _send(
     context.cmd_chat = context.chat_id
     context.cmd_baseline = len(helpers.get_outbox(context.chat_id))
     context.last_sent_message_id = helpers.inject_message(text, context.chat_id, user, entities=entities, reply_to_message_id=reply_to_message_id)["message_id"]
+    context.last_sent_reply_to = reply_to_message_id
+
+
+@when('the user replies "(?P<text>[^"]*)" to that message')
+def step_user_replies_to_own(context: Context, text: str) -> None:
+    _send(context, text, context.user, reply_to_message_id=context.last_sent_message_id)
+
+
+def _json(value: Any) -> Any:
+    """Bot API parameters arrive JSON-encoded when they are objects."""
+    return json.loads(value) if isinstance(value, str) else value
+
+
+@then('the bot relays "(?P<expected>[^"]*)" as a reply to (?P<which>the remembered message|that message)')
+def step_bot_relays_reply(context: Context, expected: str, which: str) -> None:
+    target: int = context.remembered_message_id if which == "the remembered message" else context.last_sent_message_id
+    deadline: float = time.time() + helpers.REPLY_TIMEOUT
+    sent: List[Any] = []
+    while time.time() < deadline:
+        sent = [(m["text"], _json(m["params"].get("reply_parameters"))) for m in helpers.get_outbox(context.chat_id)[context.cmd_baseline:]
+                if m["method"] == "sendMessage"]
+        if any(text == expected and (reply or {}).get("message_id") == target for text, reply in sent):
+            return
+        time.sleep(helpers.POLL_INTERVAL)
+    raise AssertionError(f"Expected {expected!r} as a reply to message {target}; sent: {sent}")
 
 
 @when('the user edits that message to "(?P<text>[^"]*)"')
 def step_user_edits(context: Context, text: str) -> None:
     context.cmd_baseline = len(helpers.get_outbox(context.chat_id))
-    helpers.inject_edited_message(text, context.chat_id, context.user, context.last_sent_message_id)
+    helpers.inject_edited_message(text, context.chat_id, context.user, context.last_sent_message_id, context.last_sent_reply_to)
 
 
 @then('the bot deletes its (?P<count>\\d+) cop(?:y|ies)')

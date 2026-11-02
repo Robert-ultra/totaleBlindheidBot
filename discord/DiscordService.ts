@@ -21,7 +21,7 @@ import {
 } from 'discord.js';
 import ChatLinkDAO, { ChatLink } from '../dao/ChatLinkDAO.js';
 import { DiscordIdentity } from '../dao/UserDAO.js';
-import { splitMessage } from './markdown.js';
+import { splitMessage, toDiscordMarkdown } from './markdown.js';
 import { Rsvp } from '../dao/RsvpDAO.js';
 import { RsvpKeyboardKind, rsvpLabels } from '../rsvp.js';
 import { RelayFile } from '../media.js';
@@ -50,6 +50,17 @@ export interface Webhook {
 // Discord webhook names (and the per-message username override) may not contain these.
 const sanitizeWebhookName = (name: string): string =>
     name.replace(/discord/gi, 'didi').replace(/clyde/gi, 'dada').slice(0, 80) || 'someone';
+
+// The message a relayed copy replies to, as its copy in the same channel. Webhooks can't post real
+// replies, so a reply is a linked line above the message.
+export interface ReplyTo {
+    author: string;
+    message_id: string;
+}
+
+const replyLine = (link: ChatLink, reply?: ReplyTo): string => reply
+    ? `-# [↪ Replying to ${toDiscordMarkdown({ text: reply.author, entities: [] })}](https://discord.com/channels/${link.discord_guild_id}/${link.discord_channel_id}/${reply.message_id})\n`
+    : '';
 
 const botRelayText = (author: string, content: string): string => content ? `**${author}:** ${content}` : `**${author}:**`;
 
@@ -320,11 +331,12 @@ class DiscordService {
     }
 
     // Returns the (last) message sent and how, so it can be edited later.
-    async relay(link: ChatLink, author: string, content: string, files: RelayFile[] = []): Promise<{ message_id: string; kind: CopyKind }> {
+    async relay(link: ChatLink, author: string, content: string, files: RelayFile[] = [], reply?: ReplyTo): Promise<{ message_id: string; kind: CopyKind }> {
         const attachments = files.map(file => ({ attachment: file.data, name: file.name }));
         if (link.webhook_id && link.webhook_token) {
             const webhook = this.webhookClient({ id: link.webhook_id, token: link.webhook_token });
-            const chunks: string[] = content ? splitMessage(content) : [''];
+            const text: string = replyLine(link, reply) + content;
+            const chunks: string[] = text ? splitMessage(text) : [''];
             const message_id: string = await chunks.reduce((sending: Promise<string>, chunk: string, i: number) => sending.then(() => webhook.send({
                 content: chunk,
                 username: sanitizeWebhookName(author),
@@ -333,7 +345,7 @@ class DiscordService {
             })).then(sent => sent.id), Promise.resolve(''));
             return { message_id, kind: 'webhook' };
         }
-        return { message_id: await this.sendAsBot(link.discord_channel_id, botRelayText(author, content), undefined, attachments), kind: 'bot' };
+        return { message_id: await this.sendAsBot(link.discord_channel_id, replyLine(link, reply) + botRelayText(author, content), undefined, attachments), kind: 'bot' };
     }
 
     async deleteRelayed(link: ChatLink, message_id: string, kind: CopyKind): Promise<void> {
@@ -345,11 +357,11 @@ class DiscordService {
         await channel?.messages.delete(message_id);
     }
 
-    async editRelayed(link: ChatLink, message_id: string, kind: CopyKind, author: string, content: string): Promise<void> {
+    async editRelayed(link: ChatLink, message_id: string, kind: CopyKind, author: string, content: string, reply?: ReplyTo): Promise<void> {
         if (kind === 'webhook' && link.webhook_id && link.webhook_token) {
-            await this.webhookClient({ id: link.webhook_id, token: link.webhook_token }).editMessage(message_id, { content: splitMessage(content)[0] });
+            await this.webhookClient({ id: link.webhook_id, token: link.webhook_token }).editMessage(message_id, { content: splitMessage(replyLine(link, reply) + content)[0] });
         } else if (kind === 'bot') {
-            await this.editMessage(link.discord_channel_id, message_id, botRelayText(author, content));
+            await this.editMessage(link.discord_channel_id, message_id, replyLine(link, reply) + botRelayText(author, content));
         }
     }
 }
