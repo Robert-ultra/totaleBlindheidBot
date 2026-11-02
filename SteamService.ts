@@ -7,7 +7,8 @@ import GameUpdateDAO, { GameUpdate, StoredGameMessage } from './dao/GameUpdateDA
 import GameHistoryDAO, { GameHistoryEntry, GameHistoryCoPlayer, SessionMatch, SiblingMatch } from './dao/GameHistoryDAO.js';
 import PresenceEventDAO from './dao/PresenceEventDAO.js';
 import RollcallPlayerDAO from './dao/RollcallPlayerDAO.js';
-import { bold, fmt, Formatted, messageText, sameFormatted } from './format.js';
+import { bold, fmt, Formatted, sameFormatted } from './format.js';
+import { editMirrored, sendMirrored } from './messenger.js';
 import { parseMention } from './rsvp.js';
 import { saveSteamFile, readSteamFile, withTransaction } from './dao/Database.js';
 import {
@@ -24,6 +25,8 @@ const MATCH_SWEEP_MS = Number(process.env.MATCH_SWEEP_MS) || 60 * 1000;
 
 // How long a game message is kept up to date. Past that its presence marker is stripped.
 const GAME_UPDATE_LIVE_MS = 6 * 60 * 60 * 1000;
+// Shown as the author when someone on the other platform replies to a game message.
+const STEAM_AUTHOR = 'Steam';
 
 // How recently a match must have been announced for a later-finalising player of the same match
 // to be grouped into (and edit) that existing message rather than posting a fresh one. Players'
@@ -527,11 +530,7 @@ class SteamService {
                 // Update existing message
                 try {
                     console.log(`Editing message ${lastUpdate.message_id} in chat ${chatId} for user ${tgUserId}`);
-                    await this.bot.api.editMessageText({
-                        ...messageText(text),
-                        chat_id: chatId,
-                        message_id: lastUpdate.message_id
-                    });
+                    await editMirrored(this.bot, chatId, lastUpdate.message_id, text);
                     // Keep original timestamp, but update text and info
                     await this.gameUpdateDao.updateGameUpdateText(chatId, tgUserId, text, info);
                     return;
@@ -549,10 +548,7 @@ class SteamService {
 
             // Send new message
             console.log(`Sending new update message to chat ${chatId} for user ${tgUserId}`);
-            const sentMessage = await this.bot.api.sendMessage({
-                chat_id: chatId,
-                ...messageText(text)
-            });
+            const sentMessage = await sendMirrored(this.bot, chatId, text, STEAM_AUTHOR);
             if (sentMessage && sentMessage.message_id) {
                 await this.gameUpdateDao.setGameUpdate(chatId, tgUserId, sentMessage.message_id, text, info);
             }
@@ -982,11 +978,7 @@ class SteamService {
 
         if (target) {
             try {
-                await this.bot.api.editMessageText({
-                    ...messageText(text),
-                    chat_id: chatId,
-                    message_id: target.messageId
-                });
+                await editMirrored(this.bot, chatId, target.messageId, text);
             } catch (err: any) {
                 if (!(err.message && err.message.includes('message is not modified'))) {
                     console.error(`Failed to edit end-of-game message ${target.messageId} in chat ${chatId}:`, err);
@@ -997,7 +989,7 @@ class SteamService {
             return;
         }
 
-        const sent = await this.bot.api.sendMessage({ chat_id: chatId, ...messageText(text) });
+        const sent = await sendMirrored(this.bot, chatId, text, STEAM_AUTHOR);
         if (sent && sent.message_id) {
             await this.gameHistoryDao.setGameHistoryMessageId(historyId, sent.message_id);
         }
@@ -1038,7 +1030,7 @@ class SteamService {
                 text: message.text.text.slice(0, at) + message.text.text.slice(at + removed),
                 entities: message.text.entities.map(e => e.offset > at ? { ...e, offset: e.offset - removed } : e)
             };
-            await this.bot.api.editMessageText({ ...messageText(text), chat_id: message.chat_id, message_id: message.message_id })
+            await editMirrored(this.bot, message.chat_id, message.message_id, text)
                 .catch((err: Error) => console.error(`Failed to strip presence marker from message ${message.message_id} in chat ${message.chat_id}:`, err));
             await this.gameUpdateDao.setGameMessageText({ ...message, text });
         }
@@ -1131,11 +1123,7 @@ class SteamService {
 
             console.log(`Closing session for user ${tgUserId} in chat ${chatId}. Editing message ${lastUpdate.message_id}.`);
 
-            await this.bot.api.editMessageText({
-                ...messageText(newText),
-                chat_id: chatId,
-                message_id: lastUpdate.message_id
-            });
+            await editMirrored(this.bot, chatId, lastUpdate.message_id, newText);
 
             // Update DAO with the closed text, but drop the now-stale detail. A closed session
             // has no live map/score left to protect, so the next launch — often a bare

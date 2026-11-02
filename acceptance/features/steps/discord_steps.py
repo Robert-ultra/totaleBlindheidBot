@@ -190,6 +190,13 @@ def step_channel_receives_bot_containing(context: Context, channel_id: str, text
     assert hits, f"Expected a bot message containing {text!r} in channel {channel_id}, got {[(m['method'], m['content']) for m in new]}"
 
 
+@then('Discord channel "(?P<channel_id>\\d+)" sees a bot message edited to contain "(?P<text>[^"]+)"')
+def step_channel_bot_message_edited(context: Context, channel_id: str, text: str) -> None:
+    is_edit = lambda m: m["method"] == "editMessage" and text in m["content"]
+    new: List[Dict[str, Any]] = _new_messages(context, channel_id, is_edit)
+    assert any(is_edit(m) for m in new), f"Expected a bot message in channel {channel_id} edited to contain {text!r}, got {_describe(new)}"
+
+
 @then('Discord channel "(?P<channel_id>\\d+)" receives a bot message')
 def step_channel_receives_bot_message(context: Context, channel_id: str) -> None:
     new: List[Dict[str, Any]] = _new_messages(context, channel_id, _is_bot_message)
