@@ -79,8 +79,13 @@ const repliedTo = async (ref: MessageRef | undefined): Promise<RelayedMessage[]>
 const telegramReply = (msg: TelegramMessage): Promise<RelayedMessage[]> =>
     repliedTo(msg.reply_to_message && { platform: 'telegram', chat_id: String(msg.chat.id), message_id: String(msg.reply_to_message.message_id) });
 
-const discordReply = (message: DiscordMessage): Promise<RelayedMessage[]> =>
-    repliedTo(message.reference?.messageId ? { platform: 'discord', chat_id: message.reference.channelId, message_id: message.reference.messageId } : undefined);
+// A thread message answers the message the thread was started on, which shares the thread's id.
+export const discordReply = (message: DiscordMessage): Promise<RelayedMessage[]> => {
+    const thread = message.channel.isThread() ? message.channel : undefined;
+    return repliedTo(message.reference?.messageId
+        ? { platform: 'discord', chat_id: message.reference.channelId, message_id: message.reference.messageId }
+        : thread?.parentId ? { platform: 'discord', chat_id: thread.parentId, message_id: thread.id } : undefined);
+};
 
 // Where the replied-to message is in this chat or channel.
 const replyIn = (group: RelayedMessage[], platform: Platform, chat_id: string): ReplyTo | undefined => {

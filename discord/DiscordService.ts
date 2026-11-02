@@ -1,5 +1,6 @@
 import {
     ActionRowBuilder,
+    AnyThreadChannel,
     ApplicationCommandOptionType,
     ButtonBuilder,
     ButtonInteraction,
@@ -126,6 +127,9 @@ class DiscordService {
         this.client.on('messageUpdate', (_old, message) => {
             this.handleEdit(message).catch((err: Error) => console.error('Error handling Discord edit:', err));
         });
+        this.client.on('threadCreate', thread => {
+            this.joinThread(thread).catch((err: Error) => console.error(`Could not join Discord thread ${thread.id}:`, err));
+        });
         this.client.on('messageDelete', message => {
             this.handleDelete(message.channelId, message.id).catch((err: Error) => console.error('Error handling Discord deletion:', err));
         });
@@ -210,11 +214,25 @@ class DiscordService {
         })), guild_id);
     }
 
+    // A thread's messages belong to the channel it was started in.
+    private linkOf(channel_id: string): Promise<ChatLink | undefined> {
+        const channel = this.client.channels.cache.get(channel_id);
+        return this.chatLinkDao.getLinkByChannel(channel?.isThread() && channel.parentId ? channel.parentId : channel_id);
+    }
+
+    // The bot only hears a thread once it has joined it.
+    private async joinThread(thread: AnyThreadChannel): Promise<void> {
+        if (thread.joinable && await this.linkOf(thread.id)) {
+            await thread.join();
+        }
+    }
+
+    // System messages, such as Discord announcing a new thread, aren't relayed.
     private async handleMessage(message: Message): Promise<void> {
-        if (!message.inGuild() || message.author.id === this.client.user?.id) {
+        if (!message.inGuild() || message.system || message.author.id === this.client.user?.id) {
             return;
         }
-        const link: ChatLink | undefined = await this.chatLinkDao.getLinkByChannel(message.channelId);
+        const link: ChatLink | undefined = await this.linkOf(message.channelId);
         if (!link || (message.webhookId && message.webhookId === link.webhook_id)) {
             return;
         }
@@ -226,7 +244,7 @@ class DiscordService {
         if (!message.editedTimestamp || message.author?.id === this.client.user?.id) {
             return;
         }
-        const link: ChatLink | undefined = await this.chatLinkDao.getLinkByChannel(message.channelId);
+        const link: ChatLink | undefined = await this.linkOf(message.channelId);
         if (!link || (message.webhookId && message.webhookId === link.webhook_id)) {
             return;
         }
@@ -234,7 +252,7 @@ class DiscordService {
     }
 
     private async handleDelete(channel_id: string, message_id: string): Promise<void> {
-        const link: ChatLink | undefined = await this.chatLinkDao.getLinkByChannel(channel_id);
+        const link: ChatLink | undefined = await this.linkOf(channel_id);
         if (link) {
             await Promise.all(this.deleteHandlers.map(handler => handler(channel_id, message_id, link)));
         }
@@ -243,7 +261,7 @@ class DiscordService {
     // Custom emoji (those with an id) can't be shown elsewhere.
     private async handleReaction(reaction: MessageReaction | PartialMessageReaction, user: User | PartialUser, added: boolean): Promise<void> {
         const emoji: string | null = reaction.emoji.id ? null : reaction.emoji.name;
-        if (!emoji || user.id === this.client.user?.id || !await this.chatLinkDao.getLinkByChannel(reaction.message.channelId)) {
+        if (!emoji || user.id === this.client.user?.id || !await this.linkOf(reaction.message.channelId)) {
             return;
         }
         await Promise.all(this.reactionHandlers.map(handler => handler(reaction.message.channelId, reaction.message.id, user.id, emoji, added)));

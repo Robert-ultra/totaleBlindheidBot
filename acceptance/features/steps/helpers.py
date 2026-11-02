@@ -485,6 +485,13 @@ def discord_react(message_id: str, user: Dict[str, Any], emoji: str, remove: boo
     requests.post(f"{DISCORD_MOCK_URL}/test/react", json=body, timeout=5).raise_for_status()
 
 
+def discord_start_thread(message_id: str, name: str, user: Dict[str, Any]) -> str:
+    body: Dict[str, Any] = {"message_id": message_id, "name": name, "user": user}
+    response = requests.post(f"{DISCORD_MOCK_URL}/test/thread", json=body, timeout=5)
+    response.raise_for_status()
+    return response.json()["thread_id"]
+
+
 def discord_inject(channel_id: str, content: str, author: Dict[str, Any], **extra: Any) -> Dict[str, Any]:
     body: Dict[str, Any] = {"channel_id": channel_id, "content": content, "author": author, **extra}
     resp = requests.post(f"{DISCORD_MOCK_URL}/test/inject", json=body, timeout=5)

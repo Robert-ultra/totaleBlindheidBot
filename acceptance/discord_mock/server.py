@@ -54,6 +54,7 @@ _guilds: Dict[str, Dict[str, Any]] = {}      # guild id -> {"id", "name", "chann
 _webhooks: Dict[str, Dict[str, Any]] = {}    # webhook id -> webhook object (with token)
 _outbox: List[Dict[str, Any]] = []           # everything the bot posted, in order
 _messages: Dict[str, Dict[str, Any]] = {}    # message id -> message object, for edits and deletions
+_threads: Dict[str, Dict[str, Any]] = {}     # thread id -> thread channel object
 _ids = itertools.count(100000000000000001)   # snowflake-ish ids for messages and webhooks
 
 _loop: Optional[asyncio.AbstractEventLoop] = None
@@ -189,6 +190,9 @@ def _find_channel(channel_id: str):
         channel = guild["channels"].get(channel_id)
         if channel:
             return guild, channel
+    thread = _threads.get(channel_id)
+    if thread:
+        return _guilds[thread["guild_id"]], thread
     return None, None
 
 
@@ -665,6 +669,16 @@ def cdn_attachment(attachment_id: str, filename: str) -> Response:
     return Response(stored["data"], content_type=stored["content_type"] or "application/octet-stream")
 
 
+@app.route("/api/v10/channels/<channel_id>/thread-members/@me", methods=["PUT"])
+def join_thread(channel_id: str) -> Response:
+    with _lock:
+        if channel_id not in _threads:
+            return _error(404, 10003, "Unknown Channel")
+        _outbox.append({"method": "joinThread", "channel_id": channel_id, "message_id": None,
+                        "content": "", "username": None, "attachments": [], "params": {}})
+    return Response(status=204)
+
+
 @app.route("/api/v10/<path:rest>", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
 def unhandled(rest: str) -> Response:
     return _error(404, 0, f"discord_mock: no handler for {request.method} /api/v10/{rest}")
@@ -794,6 +808,30 @@ def react() -> Response:
             event["member"] = {"user": user, "roles": [], "joined_at": _now(), "deaf": False, "mute": False, "flags": 0}
     _dispatch("MESSAGE_REACTION_ADD" if added else "MESSAGE_REACTION_REMOVE", event)
     return jsonify({"ok": True})
+
+
+@app.route("/test/thread", methods=["POST"])
+def start_thread() -> Response:
+    """A Discord user starts a public thread on a message; Discord announces it in the channel."""
+    body = request.get_json(force=True) or {}
+    with _lock:
+        starter = _messages.get(body["message_id"])
+        if starter is None:
+            return _error(404, 10008, "Unknown Message")
+        guild, _ = _find_channel(starter["channel_id"])
+        user = {"discriminator": "0", "avatar": None, "bot": False, "global_name": None, **body["user"]}
+        thread = {
+            "id": starter["id"], "type": 11, "guild_id": guild["id"], "parent_id": starter["channel_id"],
+            "name": body["name"], "owner_id": user["id"], "rate_limit_per_user": 0, "member_count": 1, "message_count": 0,
+            "thread_metadata": {"archived": False, "auto_archive_duration": 1440, "archive_timestamp": _now(), "locked": False},
+        }
+        _threads[thread["id"]] = thread
+        announcement = _message_object(starter["channel_id"], guild["id"], body["name"], user)
+        announcement["type"] = 18
+        announcement["message_reference"] = {"channel_id": thread["id"], "guild_id": guild["id"]}
+    _dispatch("THREAD_CREATE", {**thread, "newly_created": True})
+    _dispatch("MESSAGE_CREATE", announcement)
+    return jsonify({"ok": True, "thread_id": thread["id"]})
 
 
 def _interaction_base(body: Dict[str, Any]) -> Dict[str, Any]:
