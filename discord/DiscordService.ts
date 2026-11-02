@@ -55,6 +55,7 @@ const botRelayText = (author: string, content: string): string => content ? `**$
 
 export type DiscordMessageHandler = (message: Message, link: ChatLink) => Promise<void>;
 export type DiscordEditHandler = (message: Message | PartialMessage, link: ChatLink) => Promise<void>;
+export type DiscordDeleteHandler = (channel_id: string, message_id: string, link: ChatLink) => Promise<void>;
 export type DiscordCommandHandler = (interaction: ChatInputCommandInteraction, link: ChatLink) => Promise<void>;
 export type DiscordButtonHandler = (interaction: ButtonInteraction, link: ChatLink) => Promise<void>;
 
@@ -82,6 +83,7 @@ class DiscordService {
     private webhookClients: Map<string, WebhookClient> = new Map();
     private messageHandlers: DiscordMessageHandler[] = [];
     private editHandlers: DiscordEditHandler[] = [];
+    private deleteHandlers: DiscordDeleteHandler[] = [];
     private commandHandlers: DiscordCommandHandler[] = [];
     private buttonHandlers: DiscordButtonHandler[] = [];
     private slashCommands: SlashCommand[] = [];
@@ -106,6 +108,9 @@ class DiscordService {
         this.client.on('messageUpdate', (_old, message) => {
             this.handleEdit(message).catch((err: Error) => console.error('Error handling Discord edit:', err));
         });
+        this.client.on('messageDelete', message => {
+            this.handleDelete(message.channelId, message.id).catch((err: Error) => console.error('Error handling Discord deletion:', err));
+        });
         this.client.on('interactionCreate', (interaction: Interaction) => {
             this.handleInteraction(interaction).catch((err: Error) => console.error('Error handling Discord interaction:', err));
         });
@@ -128,6 +133,10 @@ class DiscordService {
 
     onEdit(handler: DiscordEditHandler): void {
         this.editHandlers.push(handler);
+    }
+
+    onDelete(handler: DiscordDeleteHandler): void {
+        this.deleteHandlers.push(handler);
     }
 
     onCommand(handler: DiscordCommandHandler): void {
@@ -194,6 +203,13 @@ class DiscordService {
             return;
         }
         await Promise.all(this.editHandlers.map(handler => handler(message, link)));
+    }
+
+    private async handleDelete(channel_id: string, message_id: string): Promise<void> {
+        const link: ChatLink | undefined = await this.chatLinkDao.getLinkByChannel(channel_id);
+        if (link) {
+            await Promise.all(this.deleteHandlers.map(handler => handler(channel_id, message_id, link)));
+        }
     }
 
     private async fetchGuildTextChannel(channel_id: string): Promise<GuildTextBasedChannel | null | undefined> {
@@ -318,6 +334,15 @@ class DiscordService {
             return { message_id, kind: 'webhook' };
         }
         return { message_id: await this.sendAsBot(link.discord_channel_id, botRelayText(author, content), undefined, attachments), kind: 'bot' };
+    }
+
+    async deleteRelayed(link: ChatLink, message_id: string, kind: CopyKind): Promise<void> {
+        if (kind === 'webhook' && link.webhook_id && link.webhook_token) {
+            await this.webhookClient({ id: link.webhook_id, token: link.webhook_token }).deleteMessage(message_id);
+            return;
+        }
+        const channel = await this.fetchGuildTextChannel(link.discord_channel_id);
+        await channel?.messages.delete(message_id);
     }
 
     async editRelayed(link: ChatLink, message_id: string, kind: CopyKind, author: string, content: string): Promise<void> {

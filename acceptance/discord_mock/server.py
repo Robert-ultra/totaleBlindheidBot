@@ -392,6 +392,23 @@ def edit_message(channel_id: str, message_id: str) -> Response:
     return jsonify(message)
 
 
+def _deleted(channel_id: str, message_id: str, method: str) -> Dict[str, Any]:
+    """Forget a message, record who deleted it, and return the gateway event to dispatch."""
+    _messages.pop(message_id, None)
+    guild, _ = _find_channel(channel_id)
+    _outbox.append({"method": method, "channel_id": channel_id, "message_id": message_id,
+                    "content": "", "username": None, "attachments": [], "params": {}})
+    return {"id": message_id, "channel_id": channel_id, "guild_id": guild["id"] if guild else None}
+
+
+@app.route("/api/v10/channels/<channel_id>/messages/<message_id>", methods=["DELETE"])
+def delete_message(channel_id: str, message_id: str) -> Response:
+    with _lock:
+        event = _deleted(channel_id, message_id, "deleteMessage")
+    _dispatch("MESSAGE_DELETE", event)
+    return Response(status=204)
+
+
 @app.route("/api/v10/channels/<channel_id>/webhooks", methods=["POST"])
 def create_webhook(channel_id: str) -> Response:
     body = _body()
@@ -493,6 +510,17 @@ def edit_webhook_message(webhook_id: str, token: str, message_id: str) -> Respon
         })
     _dispatch("MESSAGE_UPDATE", message)
     return jsonify(message)
+
+
+@app.route("/api/v10/webhooks/<webhook_id>/<token>/messages/<message_id>", methods=["DELETE"])
+def delete_webhook_message(webhook_id: str, token: str, message_id: str) -> Response:
+    with _lock:
+        webhook = _webhooks.get(webhook_id)
+        if not webhook or webhook["token"] != token:
+            return _error(404, 10015, "Unknown Webhook")
+        event = _deleted(webhook["channel_id"], message_id, "deleteWebhookMessage")
+    _dispatch("MESSAGE_DELETE", event)
+    return Response(status=204)
 
 
 @app.route("/api/v10/applications/<application_id>/guilds/<guild_id>/commands", methods=["PUT"])
@@ -708,6 +736,18 @@ def edit_injected() -> Response:
     if message is None:
         return _error(404, 10008, "Unknown Message")
     _dispatch("MESSAGE_UPDATE", message)
+    return jsonify({"ok": True})
+
+
+@app.route("/test/delete", methods=["POST"])
+def delete_injected() -> Response:
+    """Someone in Discord deletes a message (their own, or a moderator any message)."""
+    body = request.get_json(force=True) or {}
+    with _lock:
+        message = _messages.pop(body["message_id"], None)
+        if message is None:
+            return _error(404, 10008, "Unknown Message")
+    _dispatch("MESSAGE_DELETE", {"id": message["id"], "channel_id": message["channel_id"], "guild_id": message.get("guild_id")})
     return jsonify({"ok": True})
 
 

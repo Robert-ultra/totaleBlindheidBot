@@ -66,6 +66,12 @@ class RelayedMessageDAO {
         );
         return rows.map(fromRow);
     }
+
+    async forget(ids: number[]): Promise<void> {
+        if (ids.length > 0) {
+            await query<ResultSetHeader>('DELETE FROM relayed_message WHERE id IN (:ids)', { ids });
+        }
+    }
 }
 
 export default RelayedMessageDAO;

@@ -54,6 +54,25 @@ def step_user_edits(context: Context, text: str) -> None:
     helpers.inject_edited_message(text, context.chat_id, context.user, context.last_sent_message_id)
 
 
+@then('the bot deletes its (?P<count>\\d+) cop(?:y|ies)')
+def step_bot_deletes_copies(context: Context, count: str) -> None:
+    deadline: float = time.time() + helpers.REPLY_TIMEOUT
+    deleted: List[Any] = []
+    while time.time() < deadline:
+        deleted = [m["message_id"] for m in helpers.get_outbox(context.chat_id)[context.cmd_baseline:] if m["method"] == "deleteMessage"]
+        if len(deleted) == int(count):
+            return
+        time.sleep(helpers.POLL_INTERVAL)
+    raise AssertionError(f"Expected {count} deleted copies in chat {context.chat_id}, got {deleted}")
+
+
+@then('the bot deletes nothing')
+def step_bot_deletes_nothing(context: Context) -> None:
+    time.sleep(3)
+    deleted: List[Any] = [m for m in helpers.get_outbox(context.chat_id)[context.cmd_baseline:] if m["method"] == "deleteMessage"]
+    assert not deleted, f"Expected no deletions in chat {context.chat_id}, got {deleted}"
+
+
 @then('the bot edits its copy to "(?P<expected>[^"]*)"')
 def step_bot_edits_copy(context: Context, expected: str) -> None:
     deadline: float = time.time() + helpers.REPLY_TIMEOUT

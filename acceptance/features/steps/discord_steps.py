@@ -74,6 +74,26 @@ def step_discord_message_edited(context: Context, text: str) -> None:
     helpers.discord_edit(context.discord_last_sent_id, text)
 
 
+@when('that Discord message is deleted')
+def step_discord_message_deleted(context: Context) -> None:
+    context.cmd_baseline = len(helpers.get_outbox(context.chat_id))
+    helpers.discord_delete(context.discord_last_sent_id)
+
+
+@when('someone deletes the copy in Discord channel "(?P<channel_id>\\d+)"')
+def step_discord_copy_deleted(context: Context, channel_id: str) -> None:
+    context.cmd_baseline = len(helpers.get_outbox(context.chat_id))
+    copies: List[Dict[str, Any]] = [m for m in helpers.discord_outbox(channel_id) if m["method"] in ("executeWebhook", "createMessage")]
+    helpers.discord_delete(copies[-1]["message_id"])
+
+
+@then('Discord channel "(?P<channel_id>\\d+)" sees its copy deleted')
+def step_channel_copy_deleted(context: Context, channel_id: str) -> None:
+    is_deletion = lambda m: m["method"] in ("deleteWebhookMessage", "deleteMessage")
+    new: List[Dict[str, Any]] = _new_messages(context, channel_id, is_deletion)
+    assert any(is_deletion(m) for m in new), f"Expected the copy in channel {channel_id} to be deleted, got {_describe(new)}"
+
+
 @then('Discord channel "(?P<channel_id>\\d+)" sees its copy edited to "(?P<text>[^"]*)"')
 def step_channel_copy_edited(context: Context, channel_id: str, text: str) -> None:
     is_edit = lambda m: m["method"] in ("editWebhookMessage", "editMessage") and m["content"] == text
