@@ -67,7 +67,7 @@ export const relayFromDiscord = async (bot: Bot, message: DiscordMessage, link: 
     if (!message.content && media.files.length === 0 && media.placeholders.length === 0) {
         return;
     }
-    const author: string = message.member?.displayName ?? message.author.displayName;
+    const author: string = message.author.username;
     // cleanContent has user and channel mentions spelled out as names.
     const text: string = [...media.placeholders, message.cleanContent].filter(Boolean).join(' ');
 

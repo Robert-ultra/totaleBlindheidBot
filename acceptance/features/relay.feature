@@ -22,14 +22,14 @@ Feature: relaying messages between a Telegram group and its Discord channels
 
   Scenario: a Discord message reaches Telegram and the other channels
     When Discord user "alice" named "Alice" with id "801001" says "count me in" in channel "80011"
-    Then the bot replies "Alice: count me in"
-    And the bot reply has "Alice:" in bold
-    And Discord channel "80021" receives "count me in" from "Alice"
+    Then the bot replies "alice: count me in"
+    And the bot reply has "alice:" in bold
+    And Discord channel "80021" receives "count me in" from "alice"
     And Discord channel "80011" receives nothing
 
   Scenario: Discord mentions are relayed as names
     When Discord user "alice" named "Alice" with id "801001" says "<@801002000000000002> you coming?" in channel "80011" mentioning user "801002000000000002" named "Bob"
-    Then the bot replies "Alice: @Bob you coming?"
+    Then the bot replies "alice: @Bob you coming?"
 
   Scenario: the bot does not relay its own Discord messages
     When the bot itself says "Linked!" in Discord channel "80011"
@@ -59,7 +59,7 @@ Feature: relaying messages between a Telegram group and its Discord channels
     When the user sends "no webhooks here"
     Then Discord channel "80041" receives "no webhooks here" posted by the bot as "Tester"
     When Discord user "dave" named "Dave" with id "801004" says "fine by me" in channel "80011"
-    Then Discord channel "80041" receives "fine by me" posted by the bot as "Dave"
+    Then Discord channel "80041" receives "fine by me" posted by the bot as "dave"
 
   Scenario: names Discord forbids in webhook usernames are altered
     Given a user with id 8102 and first name "Clyde of Discord"

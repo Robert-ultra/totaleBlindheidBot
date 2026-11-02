@@ -61,11 +61,11 @@ Feature: linking Telegram and Discord users
     And a Discord server "9006" named "Server" with channel "90061" named "general"
     And Discord channel "90061" is linked to the chat
     When Discord user "carol_cs" named "Carol" with id "900600000000000001" says "hello" in channel "90061"
-    Then the bot replies "Carol: hello"
+    Then the bot replies "carol_cs: hello"
     When the user sends "/rollcall_add_player discord:carol_cs"
     Then the bot replies "Added 1 players to rollcall."
     When the user sends "/rollcall_get_players"
-    Then the bot reply contains "- Carol"
+    Then the bot reply contains "- carol_cs"
     When user 9116 sends "/hi"
     Then the bot reply starts with "Hello to you too"
     When the user sends "/link_user @user9116 discord:carol_cs"
@@ -100,11 +100,11 @@ Feature: linking Telegram and Discord users
     And the user is an admin of the chat
     And Discord channel "90081" is linked to the chat
     When the user sends "/steam_user_id discord:erin 76561198000009008"
-    Then the bot replies "Steam user ID(s) for Erin has been set to 76561198000009008"
+    Then the bot replies "Steam user ID(s) for erin has been set to 76561198000009008"
     When the user sends "/rollcall_add_player discord:erin"
     Then the bot replies "Added 1 players to rollcall."
     When the user sends "/wingman"
-    Then the bot reply contains "Erin"
+    Then the bot reply contains "erin"
     When the user sends "/rollcall_add_player discord:nobody"
     Then the bot reply starts with "I can't find Discord user"
     When the user sends "/rollcall_remove_player discord:erin"
@@ -117,9 +117,9 @@ Feature: linking Telegram and Discord users
     And a Discord server "9009" named "Server" with channel "90091" named "general" and member "fay" named "Fay" with id "900900000000000001"
     And Discord channel "90091" is linked to the chat
     When Discord user "fay" named "Fay" with id "900900000000000001" says "gg" in channel "90091"
-    Then the bot replies "Fay: gg"
+    Then the bot replies "fay: gg"
     When the user sends "/steam_user_id discord:fay 76561198000009009"
-    Then the bot replies "Steam user ID(s) for Fay has been set to 76561198000009009"
+    Then the bot replies "Steam user ID(s) for fay has been set to 76561198000009009"
     When Steam mappings are refreshed
     And Steam reports user "76561198000009009" playing CS2 with score "5-3" on map "Inferno"
     And Steam reports user "76561198000009009" stopped playing
@@ -158,7 +158,7 @@ Feature: linking Telegram and Discord users
     When user 9120 sends "/steam_user_id 76561198000009010"
     Then the bot replies "Your Steam user ID(s) has been set to 76561198000009010"
     When the user sends "/steam_user_id discord:gus 76561198000009010"
-    Then the bot replies "Steam user ID(s) for Gus has been set to 76561198000009010"
+    Then the bot replies "Steam user ID(s) for gus has been set to 76561198000009010"
     When the user sends "/link_user @user9120 discord:gus"
     Then the bot replies "Linked User9120 to Discord user gus."
     When Steam mappings are refreshed
@@ -175,12 +175,12 @@ Feature: linking Telegram and Discord users
     And a Discord server "9011" named "Server" with channel "90111" named "general"
     And Discord channel "90111" is linked to the chat
     When Discord user "hal_cs" named "Hal" with id "901100000000000001" says "hey" in channel "90111"
-    Then the bot replies "Hal: hey"
+    Then the bot replies "hal_cs: hey"
     When user 9121 sends "/hi"
     Then the bot replies "Hello to you too, User9121!"
     When the user sends "/steam_user_id"
     Then the bot reply starts with "Whose Steam ID(s) do you want to set?"
-    And the bot reply offers the buttons "Admin (@admin)", "Hal", "User9121 (@user9121)"
+    And the bot reply offers the buttons "Admin (@admin)", "hal_cs", "User9121 (@user9121)"
     When the user sends "/link_user @user9121 discord:hal_cs"
     Then the bot replies "Linked User9121 to Discord user hal_cs."
     When the user sends "/steam_user_id"
@@ -203,7 +203,7 @@ Feature: linking Telegram and Discord users
     Then the bot replies:
       """
       Players in rollcall:
-      - Ivy
+      - ivy
       - User9122
       """
     When the user sends "/link_user @user9122 discord:ivy"
@@ -216,4 +216,4 @@ Feature: linking Telegram and Discord users
       """
     When the user sends "/rollcall"
     Then the bot reply contains "User9122"
-    And the bot reply does not contain "Ivy"
+    And the bot reply does not contain "ivy"

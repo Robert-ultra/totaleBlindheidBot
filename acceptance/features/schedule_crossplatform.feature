@@ -23,9 +23,9 @@ Feature: scheduling rollcalls across Telegram and Discord
   Scenario: a Discord schedule is confirmed on Telegram and the other channel
     When Discord user "alice" named "Alice" with id "101010000000000002" runs "/schedule" with time "3 hours" in channel "101011"
     Then the bot reply starts with "Rollcall scheduled for"
-    And the bot reply contains "🙋‍♂️ Alice"
-    And Discord channel "101011" receives a bot message containing "🙋‍♂️ Alice" with buttons "I'm in, Maybe, No"
-    And Discord channel "101021" receives a bot message containing "🙋‍♂️ Alice" with buttons "I'm in, Maybe, No"
+    And the bot reply contains "🙋‍♂️ alice"
+    And Discord channel "101011" receives a bot message containing "🙋‍♂️ alice" with buttons "I'm in, Maybe, No"
+    And Discord channel "101021" receives a bot message containing "🙋‍♂️ alice" with buttons "I'm in, Maybe, No"
     When Discord user "alice" named "Alice" with id "101010000000000002" runs "/cancel" in channel "101021"
     Then the bot replies "Scheduled rollcall cancelled."
     And Discord channel "101021" receives a bot message starting with "Scheduled rollcall cancelled."
@@ -58,12 +58,12 @@ Feature: scheduling rollcalls across Telegram and Discord
     Then the bot reply starts with "Rollcall scheduled for"
     When the latest bot message in Discord channel "101011" is remembered
     And Discord user "bob" named "Bob" with id "101010000000000003" taps "rsvp:yes" on the remembered Discord message
-    Then the remembered Discord message is edited to contain "🙋‍♂️ Captain Bob"
+    Then the remembered Discord message is edited to contain "🙋‍♂️ Captain bob"
     When the scheduled rollcall's time has come
     Then the bot reply offers a "Joining" button
-    And the bot reply contains "🙋‍♂️ Captain Bob"
-    And Discord channel "101011" receives a bot message containing "🙋‍♂️ Captain Bob" with buttons "Joining, Maybe/Later, No"
-    And Discord channel "101021" receives a bot message containing "🙋‍♂️ Captain Bob" with buttons "Joining, Maybe/Later, No"
+    And the bot reply contains "🙋‍♂️ Captain bob"
+    And Discord channel "101011" receives a bot message containing "🙋‍♂️ Captain bob" with buttons "Joining, Maybe/Later, No"
+    And Discord channel "101021" receives a bot message containing "🙋‍♂️ Captain bob" with buttons "Joining, Maybe/Later, No"
     And the remembered Discord message is edited to contain "Rollcall scheduled for" without buttons
 
   Scenario: a scheduler linked after scheduling is named by Telegram when the rollcall fires
@@ -72,12 +72,12 @@ Feature: scheduling rollcalls across Telegram and Discord
     Then the bot replies "Hello to you too, User11102!"
     When Discord user "gwen_cs" named "Gwen" with id "101010000000000007" runs "/schedule" with time "3 hours" in channel "101011"
     Then the bot reply starts with "Rollcall scheduled for"
-    And the bot reply contains "🙋‍♂️ Gwen"
+    And the bot reply contains "🙋‍♂️ gwen_cs"
     When the latest bot message is remembered
     And the user sends "/link_user @user11102 discord:gwen_cs"
     Then the bot replies "Linked User11102 to Discord user gwen_cs."
     When the scheduled rollcall's time has come
     Then the bot reply offers a "Joining" button
     And the bot reply contains "🙋‍♂️ User11102"
-    And the bot reply does not contain "Gwen"
+    And the bot reply does not contain "gwen_cs"
     And Discord channel "101011" receives a bot message containing "🙋‍♂️ User11102" with buttons "Joining, Maybe/Later, No"

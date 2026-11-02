@@ -31,10 +31,10 @@ Feature: rollcalls and wingman calls across Telegram and Discord
       | Easy peasy, lemon squeezy!                             |
       | Grab your gear and let's go!                           |
       | RUSH B DON'T STOP                                      |
-    And the bot reply contains "🙋‍♂️ Alice"
+    And the bot reply contains "🙋‍♂️ alice"
     And the bot reply offers a "Joining" button
-    And Discord channel "100011" receives a bot message containing "🙋‍♂️ Alice" with buttons "Joining, Maybe/Later, No"
-    And Discord channel "100021" receives a bot message containing "🙋‍♂️ Alice" with buttons "Joining, Maybe/Later, No"
+    And Discord channel "100011" receives a bot message containing "🙋‍♂️ alice" with buttons "Joining, Maybe/Later, No"
+    And Discord channel "100021" receives a bot message containing "🙋‍♂️ alice" with buttons "Joining, Maybe/Later, No"
 
   Scenario: a tap on Discord updates every copy
     When the user sends "/rollcall"
@@ -42,8 +42,8 @@ Feature: rollcalls and wingman calls across Telegram and Discord
     When the latest bot message is remembered
     And the latest bot message in Discord channel "100011" is remembered
     And Discord user "bob" named "Bob" with id "100010000000000003" taps "rsvp:maybe" on the remembered Discord message
-    Then the remembered message is edited to contain "🤷‍♂️ Bob"
-    And the remembered Discord message is edited to contain "🤷‍♂️ Bob"
+    Then the remembered message is edited to contain "🤷‍♂️ bob"
+    And the remembered Discord message is edited to contain "🤷‍♂️ bob"
 
   Scenario: a tap on Telegram updates the Discord copies
     When the user sends "/rollcall"
@@ -59,7 +59,7 @@ Feature: rollcalls and wingman calls across Telegram and Discord
     When the user sends "/link_user @user11004 discord:dana_cs"
     Then the bot reply starts with "I can't find Discord user"
     When Discord user "dana_cs" named "Dana D" with id "100010000000000004" says "hi" in channel "100011"
-    Then the bot replies "Dana D: hi"
+    Then the bot replies "dana_cs: hi"
     When the user sends "/link_user @user11004 discord:dana_cs"
     Then the bot replies "Linked User11004 to Discord user dana_cs."
     When the user sends "/rollcall"
@@ -73,7 +73,7 @@ Feature: rollcalls and wingman calls across Telegram and Discord
     When the user sends "/rollcall_add_player discord:erin_cs"
     Then the bot replies "Added 1 players to rollcall."
     When the user sends "/rollcall"
-    Then the bot reply contains "Erin"
+    Then the bot reply contains "erin_cs"
     And Discord channel "100011" receives a bot message containing "<@100010000000000001>" with buttons "Joining, Maybe/Later, No"
     And Discord channel "100021" receives a bot message containing "<@100010000000000001>" with buttons "Joining, Maybe/Later, No"
     When the user sends "/rollcall_remove_player discord:erin_cs"
@@ -124,11 +124,11 @@ Feature: rollcalls and wingman calls across Telegram and Discord
     When the latest bot message is remembered
     And the latest bot message in Discord channel "100011" is remembered
     And Discord user "finn_cs" named "Finn" with id "100010000000000006" taps "rsvp:maybe" on the remembered Discord message
-    Then the remembered message is edited to contain "🤷‍♂️ Finn"
+    Then the remembered message is edited to contain "🤷‍♂️ finn_cs"
     When user 11006 named "User11006" taps no
     Then the remembered message is edited to contain "🙅‍♂️ User11006"
     When the user sends "/link_user @user11006 discord:finn_cs"
     Then the bot replies "Linked User11006 to Discord user finn_cs."
     When Discord user "finn_cs" named "Finn" with id "100010000000000006" taps "rsvp:yes" on the remembered Discord message
-    Then the remembered message is edited to contain "🙋‍♂️ Captain User11006" and not "Finn"
+    Then the remembered message is edited to contain "🙋‍♂️ Captain User11006" and not "finn_cs"
     And the remembered Discord message is edited to contain "🙋‍♂️ Captain User11006"
