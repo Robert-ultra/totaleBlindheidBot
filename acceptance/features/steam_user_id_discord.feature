@@ -19,6 +19,12 @@ Feature: Steam IDs for Discord users
     And Steam reports user "76561198000009201" playing CS2 as "Sammy" with score "13-4" on map "Ancient"
     And Steam reports user "76561198000009201" stopped playing
     Then chat 9201 eventually receives a new Steam message "🏆 Sammy won a game on Ancient (Competitive): 1️⃣3️⃣-4️⃣"
+    When the user sends "/game_history sam_cs"
+    Then the bot replies:
+      """
+      Game history for Sammy
+      🏆 Ancient · Competitive · 13-4
+      """
 
   Scenario: an invalid Steam ID on Discord is rejected
     When Discord user "sam_cs" named "Sam" with id "920100000000000001" runs "/steam_user_id" with ids "123" in channel "92011"
