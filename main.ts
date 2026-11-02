@@ -15,7 +15,7 @@ import DiscordService, { SlashCommand } from './discord/DiscordService.js';
 import { toDiscordMarkdown } from './discord/markdown.js';
 import ChatLinkDAO, { ChatLink } from './dao/ChatLinkDAO.js';
 import { asFormatted, Part } from './format.js';
-import { recordDiscordSender, relayFromDiscord, relayFromTelegram } from './relay.js';
+import { recordDiscordSender, relayDiscordDeletion, relayDiscordEdit, relayFromDiscord, relayFromTelegram, relayTelegramEdit } from './relay.js';
 import { executeRollcall } from './command/rollcall.js';
 import MessageRouter, { ExtendedMessage } from './MessageRouter.js';
 import { Rsvp } from './dao/RsvpDAO.js';
@@ -131,6 +131,8 @@ const discordService: DiscordService | null = process.env.DISCORD_BOT_TOKEN ? ne
 const chatLinkDao = new ChatLinkDAO();
 discordService?.onMessage(recordDiscordSender);
 discordService?.onMessage((message, link) => relayFromDiscord(bot, message, link));
+discordService?.onEdit((message, link) => relayDiscordEdit(bot, message, link));
+discordService?.onDelete((channel_id, message_id, link) => relayDiscordDeletion(bot, channel_id, message_id, link));
 
 // The interaction must be acknowledged quickly; a broadcasting handler's channel copy becomes
 // that answer, anything said after it a follow-up.
@@ -257,7 +259,8 @@ router.route('unlink_user', unlinkUserHandler, {
 if (steamEnabled) {
     router.onReply(handleSteamIdReply);
     router.route('steam_user_id', steamUserIdHandler, {
-        helpText: 'Set your Steam user ID(s) for live game updates. Either single ID or comma-separated. Admin: /steam_user_id @user <id(s)>, /steam_user_id discord:<username> <id(s)>, or no arguments to pick a user.'
+        helpText: 'Set your Steam user ID(s) for live game updates. Either single ID or comma-separated. Admin: /steam_user_id @user <id(s)>, /steam_user_id discord:<username> <id(s)>, or no arguments to pick a user.',
+        discord: { argument: { name: 'ids', description: 'Your SteamID64(s), the 17-digit number starting with 7656, comma-separated.' } }
     });
     router.route('steam_updates', steamUpdatesHandler, {
         helpText: 'Enable or disable Steam updates for this chat (on/off).'
@@ -326,6 +329,10 @@ bot.on('message', (ctx: Context) => {
             relayFromTelegram(bot, msg).catch((err: Error) => console.error('Error relaying Telegram message:', err));
         })
         .catch((err: Error) => console.error('Error recording message sender:', err));
+});
+
+bot.on('edited_message', (ctx: Context) => {
+    relayTelegramEdit(ctx.editedMessage!).catch((err: Error) => console.error('Error relaying Telegram edit:', err));
 });
 
 bot.on('callback_query', (ctx: Context) => {

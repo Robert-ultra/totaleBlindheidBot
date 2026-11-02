@@ -127,22 +127,21 @@ export const discordMedia = (message: DiscordMessage): { files: DiscordMedia[]; 
     return { files, placeholders };
 };
 
-export const sendTelegramFile = async (bot: Bot, chat_id: number, kind: TelegramSendKind, file: RelayFile, caption?: Formatted): Promise<void> => {
+// Returns the id of the message sent.
+export const sendTelegramFile = async (bot: Bot, chat_id: number, kind: TelegramSendKind, file: RelayFile, caption?: Formatted, reply_to?: number): Promise<number> => {
     const input = new InputFile(new Uint8Array(file.data), { filename: file.name, contentType: file.contentType });
-    const text: { caption?: string; caption_entities?: MessageEntity[] } = caption && caption.text
-        ? { caption: caption.text, ...(caption.entities.length > 0 ? { caption_entities: caption.entities } : {}) }
-        : {};
+    const text: { caption?: string; caption_entities?: MessageEntity[]; reply_parameters?: { message_id: number; allow_sending_without_reply: boolean } } = {
+        ...(caption && caption.text ? { caption: caption.text, ...(caption.entities.length > 0 ? { caption_entities: caption.entities } : {}) } : {}),
+        ...(reply_to !== undefined ? { reply_parameters: { message_id: reply_to, allow_sending_without_reply: true } } : {})
+    };
     switch (kind) {
         case 'photo':
-            await bot.api.sendPhoto({ chat_id, photo: input, ...text });
-            break;
+            return (await bot.api.sendPhoto({ chat_id, photo: input, ...text })).message_id;
         case 'video':
-            await bot.api.sendVideo({ chat_id, video: input, ...text });
-            break;
+            return (await bot.api.sendVideo({ chat_id, video: input, ...text })).message_id;
         case 'animation':
-            await bot.api.sendAnimation({ chat_id, animation: input, ...text });
-            break;
+            return (await bot.api.sendAnimation({ chat_id, animation: input, ...text })).message_id;
         default:
-            await bot.api.sendDocument({ chat_id, document: input, ...text });
+            return (await bot.api.sendDocument({ chat_id, document: input, ...text })).message_id;
     }
 };

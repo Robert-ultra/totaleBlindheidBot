@@ -12,8 +12,8 @@ Feature: rollcalls and wingman calls across Telegram and Discord
     And Discord channel "100021" is linked to the chat
 
   Scenario: linked servers offer the cross-platform commands as slash commands
-    Then Discord server "10001" offers the slash commands "rollcall, schedule, cancel, timezone, wingman"
-    And Discord server "10002" offers the slash commands "rollcall, schedule, cancel, timezone, wingman"
+    Then Discord server "10001" offers the slash commands "rollcall, schedule, cancel, timezone, steam_user_id, wingman"
+    And Discord server "10002" offers the slash commands "rollcall, schedule, cancel, timezone, steam_user_id, wingman"
 
   Scenario: a Telegram rollcall is posted in every linked channel with its buttons
     When the user sends "/rollcall"
@@ -148,4 +148,20 @@ Feature: rollcalls and wingman calls across Telegram and Discord
     And Discord channel "100031" receives a bot message containing "<@100030000000000001>" with buttons "Joining, Maybe/Later, No"
     And Discord channel "100011" receives a bot message containing "<@100030000000000001>" with buttons "Joining, Maybe/Later, No"
     When the user sends "/rollcall_remove_player User11007" mentioning user 11007 as "User11007"
+    Then the bot replies "Poof! They're gone!"
+
+  Scenario: a linked player added by Telegram username is pinged on both platforms
+    Given the user is an admin of the chat
+    And a Discord server "10004" named "Server Four" with channel "100041" named "lobby" and member "max_cs" named "Max" with id "100040000000000001"
+    And Discord channel "100041" is linked to the chat
+    When user 11008 sends "/hi"
+    Then the bot replies "Hello to you too, User11008!"
+    When the user sends "/link_user @user11008 discord:max_cs"
+    Then the bot replies "Linked User11008 to Discord user max_cs."
+    When the user sends "/rollcall_add_player @user11008" typing the username "@user11008"
+    Then the bot replies "Added 1 players to rollcall."
+    When the user sends "/rollcall"
+    Then the bot reply contains "@user11008"
+    And Discord channel "100041" receives a bot message containing "<@100040000000000001>" with buttons "Joining, Maybe/Later, No"
+    When the user sends "/rollcall_remove_player @user11008" typing the username "@user11008"
     Then the bot replies "Poof! They're gone!"

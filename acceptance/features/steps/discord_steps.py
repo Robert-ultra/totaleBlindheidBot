@@ -1,5 +1,6 @@
 """Steps for the Discord side: defining servers, speaking as Discord users, asserting on what the bot
 posted there. The Telegram side of the same scenarios uses telegram_steps.py."""
+import re
 import time
 from typing import Any, Callable, Dict, List, Optional
 
@@ -70,7 +71,75 @@ def step_channel_linked(context: Context, channel_id: str) -> None:
 def _inject(context: Context, channel_id: str, content: str, author: Dict[str, Any], **extra: Any) -> None:
     context.cmd_chat = context.chat_id
     context.cmd_baseline = len(helpers.get_outbox(context.chat_id))
-    helpers.discord_inject(channel_id, content, author, **extra)
+    context.discord_last_sent_id = helpers.discord_inject(channel_id, content, author, **extra)["message_id"]
+    context.discord_sent = {**getattr(context, "discord_sent", {}), content: context.discord_last_sent_id}
+
+
+def _copy_of(channel_id: str, text: str) -> Optional[str]:
+    """The id of the message showing `text` in a channel: the bot's copy, or what a Discord user sent there."""
+    sent = [m for m in helpers.discord_outbox(channel_id) if m["method"] in ("executeWebhook", "createMessage")]
+    return next((m["message_id"] for m in sent if m["content"].endswith(text)), None)
+
+
+@when('Discord user "(?P<username>[^"]*)" named "(?P<name>[^"]*)" with id "(?P<user_id>\\d+)" replies "(?P<text>[^"]*)" to "(?P<replied>[^"]*)" in channel "(?P<channel_id>\\d+)"')
+def step_discord_user_replies(context: Context, username: str, name: str, user_id: str, text: str, replied: str, channel_id: str) -> None:
+    target: str = _copy_of(channel_id, replied) or context.discord_sent[replied]
+    _inject(context, channel_id, text, _author(username, name, user_id), reply_to=target)
+
+
+def _reply_pattern(context: Context, channel_id: str, text: str, name: str, replied: str, author: str) -> "re.Pattern[str]":
+    target: Optional[str] = _copy_of(channel_id, replied) or getattr(context, "discord_sent", {}).get(replied)
+    line: str = rf"-# \[↪ Replying to {re.escape(author)}\]\(https://discord\.com/channels/\d+/{channel_id}/{target}\)\n"
+    return re.compile(line + rf"(\*\*{re.escape(name)}:\*\* )?{re.escape(text)}")
+
+
+@then('Discord channel "(?P<channel_id>\\d+)" receives "(?P<text>[^"]*)" from "(?P<name>[^"]*)" replying to "(?P<replied>[^"]*)" by "(?P<author>[^"]*)"')
+def step_channel_receives_reply(context: Context, channel_id: str, text: str, name: str, replied: str, author: str) -> None:
+    expected = _reply_pattern(context, channel_id, text, name, replied, author)
+    is_reply = lambda m: m["method"] in ("executeWebhook", "createMessage") and expected.fullmatch(m["content"]) is not None
+    new: List[Dict[str, Any]] = _new_messages(context, channel_id, is_reply)
+    assert any(is_reply(m) for m in new), f"Expected {text!r} from {name!r} replying to {replied!r} in channel {channel_id}, got {_describe(new)}"
+
+
+@then('Discord channel "(?P<channel_id>\\d+)" sees its copy edited to "(?P<text>[^"]*)" from "(?P<name>[^"]*)" replying to "(?P<replied>[^"]*)" by "(?P<author>[^"]*)"')
+def step_channel_copy_edited_reply(context: Context, channel_id: str, text: str, name: str, replied: str, author: str) -> None:
+    expected = _reply_pattern(context, channel_id, text, name, replied, author)
+    is_edit = lambda m: m["method"] in ("editWebhookMessage", "editMessage") and expected.fullmatch(m["content"]) is not None
+    new: List[Dict[str, Any]] = _new_messages(context, channel_id, is_edit)
+    assert any(is_edit(m) for m in new), f"Expected the copy in channel {channel_id} edited to {text!r} replying to {replied!r}, got {_describe(new)}"
+
+
+@when('that Discord message is edited to "(?P<text>[^"]*)"')
+def step_discord_message_edited(context: Context, text: str) -> None:
+    context.cmd_baseline = len(helpers.get_outbox(context.chat_id))
+    helpers.discord_edit(context.discord_last_sent_id, text)
+
+
+@when('that Discord message is deleted')
+def step_discord_message_deleted(context: Context) -> None:
+    context.cmd_baseline = len(helpers.get_outbox(context.chat_id))
+    helpers.discord_delete(context.discord_last_sent_id)
+
+
+@when('someone deletes the copy in Discord channel "(?P<channel_id>\\d+)"')
+def step_discord_copy_deleted(context: Context, channel_id: str) -> None:
+    context.cmd_baseline = len(helpers.get_outbox(context.chat_id))
+    copies: List[Dict[str, Any]] = [m for m in helpers.discord_outbox(channel_id) if m["method"] in ("executeWebhook", "createMessage")]
+    helpers.discord_delete(copies[-1]["message_id"])
+
+
+@then('Discord channel "(?P<channel_id>\\d+)" sees its copy deleted')
+def step_channel_copy_deleted(context: Context, channel_id: str) -> None:
+    is_deletion = lambda m: m["method"] in ("deleteWebhookMessage", "deleteMessage")
+    new: List[Dict[str, Any]] = _new_messages(context, channel_id, is_deletion)
+    assert any(is_deletion(m) for m in new), f"Expected the copy in channel {channel_id} to be deleted, got {_describe(new)}"
+
+
+@then('Discord channel "(?P<channel_id>\\d+)" sees its copy edited to "(?P<text>[^"]*)"')
+def step_channel_copy_edited(context: Context, channel_id: str, text: str) -> None:
+    is_edit = lambda m: m["method"] in ("editWebhookMessage", "editMessage") and m["content"] == text
+    new: List[Dict[str, Any]] = _new_messages(context, channel_id, is_edit)
+    assert any(is_edit(m) for m in new), f"Expected a copy in channel {channel_id} edited to {text!r}, got {_describe(new)}"
 
 
 @when('Discord user "(?P<username>[^"]*)" named "(?P<name>[^"]*)" with id "(?P<user_id>\\d+)" says "(?P<text>[^"]*)" in channel "(?P<channel_id>\\d+)"')

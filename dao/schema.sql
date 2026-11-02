@@ -245,3 +245,19 @@ CREATE TABLE IF NOT EXISTS chat_link (
     PRIMARY KEY (discord_channel_id),
     KEY idx_chat_link_chat (telegram_chat_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- A relayed message and its copies on the other platforms, so edits, deletions and replies can
+-- follow it. origin_id is NULL on the original and points at it from each copy.
+CREATE TABLE IF NOT EXISTS relayed_message (
+    id         BIGINT       NOT NULL AUTO_INCREMENT,
+    origin_id  BIGINT       NULL,
+    platform   ENUM('telegram','discord') NOT NULL,
+    chat_id    VARCHAR(32)  NOT NULL,
+    message_id VARCHAR(32)  NOT NULL,
+    kind       ENUM('origin','text','caption','webhook','bot','extra') NOT NULL,
+    author     VARCHAR(255) NULL,
+    created_at DATETIME(3)  NOT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_relayed_message (platform, chat_id, message_id),
+    KEY idx_relayed_message_origin (origin_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

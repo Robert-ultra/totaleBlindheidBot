@@ -4,6 +4,7 @@ These use behave's regex matcher (which anchors patterns at both ends) so the
 generic "the user sends ..." step does not greedily swallow the more specific
 mention variants.
 """
+import json
 import re
 import time
 from typing import Any, Dict, List, Optional, Tuple
@@ -45,7 +46,70 @@ def _send(
 ) -> None:
     context.cmd_chat = context.chat_id
     context.cmd_baseline = len(helpers.get_outbox(context.chat_id))
-    helpers.inject_message(text, context.chat_id, user, entities=entities, reply_to_message_id=reply_to_message_id)
+    context.last_sent_message_id = helpers.inject_message(text, context.chat_id, user, entities=entities, reply_to_message_id=reply_to_message_id)["message_id"]
+    context.last_sent_reply_to = reply_to_message_id
+
+
+@when('the user replies "(?P<text>[^"]*)" to that message')
+def step_user_replies_to_own(context: Context, text: str) -> None:
+    _send(context, text, context.user, reply_to_message_id=context.last_sent_message_id)
+
+
+def _json(value: Any) -> Any:
+    """Bot API parameters arrive JSON-encoded when they are objects."""
+    return json.loads(value) if isinstance(value, str) else value
+
+
+@then('the bot relays "(?P<expected>[^"]*)" as a reply to (?P<which>the remembered message|that message)')
+def step_bot_relays_reply(context: Context, expected: str, which: str) -> None:
+    target: int = context.remembered_message_id if which == "the remembered message" else context.last_sent_message_id
+    deadline: float = time.time() + helpers.REPLY_TIMEOUT
+    sent: List[Any] = []
+    while time.time() < deadline:
+        sent = [(m["text"], _json(m["params"].get("reply_parameters"))) for m in helpers.get_outbox(context.chat_id)[context.cmd_baseline:]
+                if m["method"] == "sendMessage"]
+        if any(text == expected and (reply or {}).get("message_id") == target for text, reply in sent):
+            return
+        time.sleep(helpers.POLL_INTERVAL)
+    raise AssertionError(f"Expected {expected!r} as a reply to message {target}; sent: {sent}")
+
+
+@when('the user edits that message to "(?P<text>[^"]*)"')
+def step_user_edits(context: Context, text: str) -> None:
+    context.cmd_baseline = len(helpers.get_outbox(context.chat_id))
+    helpers.inject_edited_message(text, context.chat_id, context.user, context.last_sent_message_id, context.last_sent_reply_to)
+
+
+@then('the bot deletes its (?P<count>\\d+) cop(?:y|ies)')
+def step_bot_deletes_copies(context: Context, count: str) -> None:
+    deadline: float = time.time() + helpers.REPLY_TIMEOUT
+    deleted: List[Any] = []
+    while time.time() < deadline:
+        deleted = [m["message_id"] for m in helpers.get_outbox(context.chat_id)[context.cmd_baseline:] if m["method"] == "deleteMessage"]
+        if len(deleted) == int(count):
+            return
+        time.sleep(helpers.POLL_INTERVAL)
+    raise AssertionError(f"Expected {count} deleted copies in chat {context.chat_id}, got {deleted}")
+
+
+@then('the bot deletes nothing')
+def step_bot_deletes_nothing(context: Context) -> None:
+    time.sleep(3)
+    deleted: List[Any] = [m for m in helpers.get_outbox(context.chat_id)[context.cmd_baseline:] if m["method"] == "deleteMessage"]
+    assert not deleted, f"Expected no deletions in chat {context.chat_id}, got {deleted}"
+
+
+@then('the bot edits its copy to "(?P<expected>[^"]*)"')
+def step_bot_edits_copy(context: Context, expected: str) -> None:
+    deadline: float = time.time() + helpers.REPLY_TIMEOUT
+    edits: List[str] = []
+    while time.time() < deadline:
+        outbox = helpers.get_outbox(context.chat_id)[context.cmd_baseline:]
+        edits = [m["text"] for m in outbox if m["method"] in ("editMessageText", "editMessageCaption")]
+        if expected in edits:
+            return
+        time.sleep(helpers.POLL_INTERVAL)
+    raise AssertionError(f"Expected the bot to edit its copy to {expected!r}; edits: {edits}")
 
 
 @when('the user sends "(?P<text>[^"]*)"')
@@ -124,6 +188,12 @@ def step_presence_window_passed(context: Context) -> None:
 @when('the user replies "(?P<text>[^"]*)" to the remembered message')
 def step_user_replies(context: Context, text: str) -> None:
     _send(context, text, context.user, reply_to_message_id=context.remembered_message_id)
+
+
+@when('the user sends "(?P<text>[^"]*)" typing the username "(?P<word>@[A-Za-z0-9_]+)"')
+def step_user_sends_username_mention(context: Context, text: str, word: str) -> None:
+    entity: Dict[str, Any] = {"type": "mention", "offset": text.index(word), "length": len(word)}
+    _send(context, text, context.user, entities=[entity])
 
 
 @when('the user sends "(?P<text>[^"]*)" mentioning (?P<count>\\d+) users')

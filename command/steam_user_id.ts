@@ -1,5 +1,5 @@
 import { Bot, CallbackQuery, Message } from 'node-telegram-bot-api';
-import { ExtendedMessage } from '../MessageRouter.js';
+import { Command, ExtendedMessage } from '../MessageRouter.js';
 import UserDAO, { userDisplayName } from '../dao/UserDAO.js';
 import { formatError } from '../utils.js';
 import { messageText, Part } from '../format.js';
@@ -10,6 +10,7 @@ const dao = new UserDAO();
 export const CALLBACK_PREFIX = 'steamid:';
 
 const ADMIN_ONLY = 'Only the admin can set Steam IDs for other users.';
+const SPECIFY_IDS = 'Please specify your Steam user ID(s) as SteamID64 (the 17-digit number starting with 7656), separated by commas if multiple.';
 
 // "<chat_id>:<picker message_id>" -> the user the admin's reply to that message sets Steam IDs for.
 const prompts: Map<string, { user_id: number, name: string }> = new Map();
@@ -34,7 +35,21 @@ const setForUser = (user_id: number, name: string, idsArg: string, reply: (text:
         .then(() => true);
 };
 
-export default (bot: Bot, msg: ExtendedMessage): void => {
+// On Discord, people set their own IDs; setting them for someone else stays a Telegram admin command.
+export default (bot: Bot, cmd: Command): void | Promise<unknown> => {
+    if (cmd.platform === 'telegram') {
+        return handleTelegram(bot, cmd as ExtendedMessage);
+    }
+    const ids = parseIds(cmd.command.argument);
+    if (!ids) {
+        return cmd.reply(SPECIFY_IDS);
+    }
+    return dao.setSteamUserId(cmd.user.id, ids)
+        .then(() => cmd.reply(`Your Steam user ID(s) has been set to ${ids.join(', ')}`))
+        .catch((err: Error) => cmd.reply(formatError(err)));
+};
+
+const handleTelegram = (bot: Bot, msg: ExtendedMessage): void => {
     const [first = '', ...rest] = msg.command.argumentTokens;
     const mention = msg.entities?.find(e => e.type === 'text_mention' && e.user);
     const discord_username: string | undefined = parseDiscordRef(first);
@@ -76,7 +91,7 @@ export default (bot: Bot, msg: ExtendedMessage): void => {
 
     const ids = parseIds(msg.command.argument);
     if (!ids) {
-        msg.reply('Please specify your Steam user ID(s) as SteamID64 (the 17-digit number starting with 7656), separated by commas if multiple.');
+        msg.reply(SPECIFY_IDS);
         return;
     }
 
