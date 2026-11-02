@@ -11,8 +11,8 @@ const mentionUserId = async (mention: string): Promise<number | undefined> => {
     return parsed.id ?? (parsed.username ? await userDao.getUserIdByUsername(parsed.username) : undefined);
 };
 
-const mentionUsers = (rotation: string[]): Promise<Record<number, User>> =>
-    userDao.getUsers(rotation.map(mention => parseMention(mention).id).filter((id): id is number => id !== undefined));
+const mentionUsers = async (rotation: string[]): Promise<Record<number, User>> =>
+    userDao.getUsers((await Promise.all(rotation.map(mentionUserId))).filter((id): id is number => id !== undefined));
 
 // Map each rotation mention to its Steam presence marker, for prefixing the tag line of rollcalls
 // and schedules. Players without a resolvable Telegram id get no marker, and the map is empty when
