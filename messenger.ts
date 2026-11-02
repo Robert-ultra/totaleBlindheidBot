@@ -12,6 +12,7 @@ export type Target = Command | { chat_id: number };
 
 export interface BroadcastOptions {
     keyboard?: RsvpKeyboardKind;
+    linkPreview?: boolean;
 }
 
 export interface Broadcast {
@@ -29,7 +30,8 @@ export const broadcast = async (bot: Bot, target: Target, telegram: Formatted, d
             chat_id: target.chat_id,
             ...messageText(telegram),
             ...(cmd?.telegram ? { reply_parameters: { message_id: cmd.telegram.message_id } } : {}),
-            ...(opts.keyboard ? { reply_markup: keyboard(opts.keyboard) } : {})
+            ...(opts.keyboard ? { reply_markup: keyboard(opts.keyboard) } : {}),
+            ...(opts.linkPreview === false ? { link_preview_options: { is_disabled: true } } : {})
         });
     } catch (err) {
         console.error(`Could not post to Telegram chat ${target.chat_id}:`, err);
