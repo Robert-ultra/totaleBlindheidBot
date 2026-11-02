@@ -49,7 +49,7 @@ const userFromRow = (row: RowDataPacket): User => ({
 });
 
 export const userDisplayName = (user: User): string =>
-    user.name || user.username || user.discord_name || user.discord_username || String(user.id);
+    user.name || user.username || user.discord_username || String(user.id);
 
 
 class UserDAO {
