@@ -18,7 +18,7 @@ import { asFormatted, Part } from './format.js';
 import { recordDiscordSender, relayDiscordDeletion, relayDiscordEdit, relayFromDiscord, relayFromTelegram, relayTelegramEdit } from './relay.js';
 import ReactionMirror, { ReactionChange, telegramReactionChange } from './reactions.js';
 import { executeRollcall } from './command/rollcall.js';
-import MessageRouter, { ExtendedMessage } from './MessageRouter.js';
+import MessageRouter, { Command } from './MessageRouter.js';
 import { Rsvp } from './dao/RsvpDAO.js';
 import { ensureSchema } from './dao/Database.js';
 import { entryFromUser } from './rsvp.js';
@@ -227,7 +227,8 @@ ensureSchema()
 const router: MessageRouter = new MessageRouter(bot);
 
 router.route('hi', hiHandler, {
-    helpText: 'Craving that small talk, are you?'
+    helpText: 'Craving that small talk, are you?',
+    discord: {}
 });
 router.route('rollcall', rollcallHandler, {
     helpText: 'Anyone wanna play?',
@@ -278,17 +279,22 @@ if (steamEnabled) {
         helpText: 'Submit a Steam Guard code.'
     });
     router.route('game_history', gameHistoryHandler, {
-        helpText: 'Show CS2 game history for this chat. Add a player name or mention to see theirs.'
+        helpText: 'Show CS2 game history for this chat. Add a player name or mention to see theirs.',
+        discord: { argument: { name: 'player', description: 'A player name, @username or discord:username. Leave empty for yourself.' } }
     });
     router.route('stats', statsHandler, {
-        helpText: 'Show competitive CS2 stats for this chat: win rate, streaks, maps. Add a player name or mention to see theirs.'
+        helpText: 'Show competitive CS2 stats for this chat: win rate, streaks, maps. Add a player name or mention to see theirs.',
+        discord: { argument: { name: 'player', description: 'A player name, @username or discord:username. Leave empty for yourself.' } }
     });
     router.route('delete_match_record', deleteMatchRecordHandler, {
         helpText: 'Admin only: delete a mis-recorded match from a player\'s game history.'
     });
 }
 
-router.route('help', (bot: Bot, msg: ExtendedMessage) => {
+router.route('help', (bot: Bot, msg: Command) => {
+    if (msg.platform === 'discord') {
+        return msg.reply(router.discordRoutes.map(r => `/${r.command}: ${r.helpText}`).join('\n'));
+    }
     const args = msg.command?.argumentTokens;
     const [prefix, separator] = ((): [string, string] => {
         if (args?.[0] === 'botfather') {
@@ -304,7 +310,8 @@ router.route('help', (bot: Bot, msg: ExtendedMessage) => {
         routes.map((r: any) => `${prefix}${r.command}${separator}${r.helpText}`).join('\n')
     );
 }, {
-    helpText: 'I wonder...'
+    helpText: 'I wonder...',
+    discord: {}
 });
 
 router.route('rollcall_add_player', rollcallAddPlayerHandler, {
@@ -314,7 +321,8 @@ router.route('rollcall_remove_player', rollcallRemovePlayerHandler, {
     helpText: 'Remove a player from the rollcall.'
 });
 router.route('rollcall_get_players', rollcallGetPlayersHandler, {
-    helpText: 'Get all players in the rollcall.'
+    helpText: 'Get all players in the rollcall.',
+    discord: {}
 });
 
 // Don't return handler work: the poll loop awaits it before fetching the next update.

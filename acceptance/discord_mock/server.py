@@ -608,6 +608,8 @@ def edit_original(application_id: str, token: str) -> Response:
         interaction = _interactions.get(token)
         if not interaction:
             return _error(404, 10062, "Unknown interaction")
+        elif interaction.get("deleted"):
+            return _error(404, 10008, "Unknown Message")
         original = interaction.get("original")
         message = _record_interaction_message(interaction, "editReply", body, original["id"] if original else None)
         interaction["original"] = message
@@ -629,6 +631,7 @@ def delete_original(application_id: str, token: str) -> Response:
         interaction = _interactions.get(token)
         if interaction:
             interaction["original"] = None
+            interaction["deleted"] = True
             _outbox.append({"method": "deleteReply", "channel_id": interaction["channel_id"], "message_id": None,
                             "content": "", "username": None, "attachments": [], "params": {}})
     return Response(status=204)

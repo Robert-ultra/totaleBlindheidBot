@@ -186,7 +186,7 @@ def step_channel_receives_as_bot(context: Context, channel_id: str, text: str, n
 @then('Discord channel "(?P<channel_id>\\d+)" receives a bot message containing "(?P<text>[^"]+)"')
 def step_channel_receives_bot_containing(context: Context, channel_id: str, text: str) -> None:
     new: List[Dict[str, Any]] = _new_messages(context, channel_id)
-    hits = [m for m in new if m["method"] == "createMessage" and text in m["content"]]
+    hits = [m for m in new if _is_bot_message(m) and text in m["content"]]
     assert hits, f"Expected a bot message containing {text!r} in channel {channel_id}, got {[(m['method'], m['content']) for m in new]}"
 
 
@@ -195,6 +195,13 @@ def step_channel_bot_message_edited(context: Context, channel_id: str, text: str
     is_edit = lambda m: m["method"] == "editMessage" and text in m["content"]
     new: List[Dict[str, Any]] = _new_messages(context, channel_id, is_edit)
     assert any(is_edit(m) for m in new), f"Expected a bot message in channel {channel_id} edited to contain {text!r}, got {_describe(new)}"
+
+
+@then('Discord channel "(?P<channel_id>\\d+)" receives no bot message containing "(?P<text>[^"]+)"')
+def step_channel_receives_no_bot_containing(context: Context, channel_id: str, text: str) -> None:
+    new: List[Dict[str, Any]] = helpers.discord_outbox(channel_id)[_baseline(context, channel_id):]
+    hits = [m for m in new if _is_bot_message(m) and text in m["content"]]
+    assert not hits, f"Expected no bot message containing {text!r} in channel {channel_id}, got {_describe(hits)}"
 
 
 @then('Discord channel "(?P<channel_id>\\d+)" receives a bot message')
@@ -424,3 +431,10 @@ def step_channel_no_bot_reactions(context: Context, channel_id: str) -> None:
     new: List[Dict[str, Any]] = helpers.discord_outbox(channel_id)[_baseline(context, channel_id):]
     changes: List[Dict[str, Any]] = [m for m in new if m["method"] in ("addReaction", "removeReaction")]
     assert not changes, f"Expected no reaction changes from the bot in channel {channel_id}, got {_describe(changes)}"
+
+
+@then('no slash command reply is deleted in Discord channel "(?P<channel_id>\\d+)"')
+def step_no_reply_deleted(context: Context, channel_id: str) -> None:
+    time.sleep(2)
+    deleted = [m for m in helpers.discord_outbox(channel_id)[_baseline(context, channel_id):] if m["method"] == "deleteReply"]
+    assert not deleted, f"A slash command reply was deleted in channel {channel_id}"

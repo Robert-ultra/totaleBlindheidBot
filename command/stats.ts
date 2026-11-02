@@ -1,5 +1,5 @@
 import { Bot } from 'node-telegram-bot-api';
-import { ExtendedMessage } from '../MessageRouter.js';
+import { Command } from '../MessageRouter.js';
 import GameHistoryDAO, { GameHistoryEntry } from '../dao/GameHistoryDAO.js';
 import { formatError } from '../utils.js';
 import { bold, fmt, Formatted, join } from '../format.js';
@@ -185,24 +185,22 @@ export const renderStats = (entries: GameHistoryEntry[]): Formatted | null => {
     return join(blocks, '\n\n');
 };
 
-export default (bot: Bot, msg: ExtendedMessage): void => {
+export default (bot: Bot, msg: Command): Promise<unknown> =>
     resolvePlayerTarget(dao, msg)
         .then(target => {
             if (!target) {
                 return;  // resolvePlayerTarget already replied with the reason.
             }
-            return dao.getGameHistory(msg.chat.id, target.user_id)
+            return dao.getGameHistory(msg.chat_id, target.user_id)
                 .then((entries: GameHistoryEntry[]) => {
                     const text = renderStats(entries);
                     if (!text) {
-                        msg.reply(target.name
+                        return msg.reply(target.name
                             ? `No competitive games for ${target.name} in this chat yet.`
                             : 'No competitive games in your history yet.');
-                        return;
                     }
                     const header = target.name ? fmt`Competitive stats for ${bold(target.name)}\n` : '';
-                    msg.reply(fmt`${header}${text}`);
+                    return msg.reply(fmt`${header}${text}`);
                 });
         })
         .catch((err: Error) => msg.reply(formatError(err)));
-};
