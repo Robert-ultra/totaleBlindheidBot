@@ -132,3 +132,19 @@ Feature: rollcalls and wingman calls across Telegram and Discord
     When Discord user "finn_cs" named "Finn" with id "100010000000000006" taps "rsvp:yes" on the remembered Discord message
     Then the remembered message is edited to contain "🙋‍♂️ Captain User11006" and not "finn_cs"
     And the remembered Discord message is edited to contain "🙋‍♂️ Captain User11006"
+
+  Scenario: a linked player added by Telegram username is pinged on both platforms
+    Given the user is an admin of the chat
+    And a Discord server "10004" named "Server Four" with channel "100041" named "lobby" and member "max_cs" named "Max" with id "100040000000000001"
+    And Discord channel "100041" is linked to the chat
+    When user 11008 sends "/hi"
+    Then the bot replies "Hello to you too, User11008!"
+    When the user sends "/link_user @user11008 discord:max_cs"
+    Then the bot replies "Linked User11008 to Discord user max_cs."
+    When the user sends "/rollcall_add_player @user11008" typing the username "@user11008"
+    Then the bot replies "Added 1 players to rollcall."
+    When the user sends "/rollcall"
+    Then the bot reply contains "@user11008"
+    And Discord channel "100041" receives a bot message containing "<@100040000000000001>" with buttons "Joining, Maybe/Later, No"
+    When the user sends "/rollcall_remove_player @user11008" typing the username "@user11008"
+    Then the bot replies "Poof! They're gone!"

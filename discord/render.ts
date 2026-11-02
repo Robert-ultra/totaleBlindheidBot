@@ -6,7 +6,10 @@ import { toDiscordMarkdown } from './markdown.js';
 
 const discordMention = (mention: string, users: Record<number, User>): string => {
     const parsed = parseMention(mention);
-    const discord_id: string | undefined = parsed.id === undefined ? undefined : users[parsed.id]?.discord_id;
+    const user: User | undefined = parsed.id !== undefined
+        ? users[parsed.id]
+        : Object.values(users).find(u => u.username !== undefined && u.username.toLowerCase() === parsed.username?.toLowerCase());
+    const discord_id: string | undefined = user?.discord_id;
     return discord_id !== undefined ? `<@${discord_id}>` : toDiscordMarkdown({ text: parsed.display, entities: [] });
 };
 

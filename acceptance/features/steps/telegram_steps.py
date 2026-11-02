@@ -126,6 +126,12 @@ def step_user_replies(context: Context, text: str) -> None:
     _send(context, text, context.user, reply_to_message_id=context.remembered_message_id)
 
 
+@when('the user sends "(?P<text>[^"]*)" typing the username "(?P<word>@[A-Za-z0-9_]+)"')
+def step_user_sends_username_mention(context: Context, text: str, word: str) -> None:
+    entity: Dict[str, Any] = {"type": "mention", "offset": text.index(word), "length": len(word)}
+    _send(context, text, context.user, entities=[entity])
+
+
 @when('the user sends "(?P<text>[^"]*)" mentioning (?P<count>\\d+) users')
 def step_user_sends_n_mentions(context: Context, text: str, count: str) -> None:
     # Attach `count` text_mention entities to the first `count` argument tokens,
