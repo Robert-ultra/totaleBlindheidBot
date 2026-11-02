@@ -152,8 +152,11 @@ def bot_api(token: str, method: str) -> Response:
                 "text": params.get("caption", ""),
                 "params": params,
             })
-        return jsonify({"ok": True, "result": {"message_id": _maybe_int(params.get("message_id")), "date": 0,
-                                               "chat": {"id": _maybe_int(chat_id), "type": "group"}}})
+        return jsonify({"ok": True, "result": {
+            "message_id": _maybe_int(params.get("message_id")),
+            "date": 0,
+            "chat": {"id": _maybe_int(chat_id), "type": "group"},
+        }})
     elif method in ("sendPhoto", "sendVideo", "sendAnimation", "sendDocument", "sendAudio"):
         field = {
             "sendPhoto": "photo", "sendVideo": "video", "sendAnimation": "animation",
