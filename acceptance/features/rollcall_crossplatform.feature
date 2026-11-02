@@ -133,6 +133,23 @@ Feature: rollcalls and wingman calls across Telegram and Discord
     Then the remembered message is edited to contain "🙋‍♂️ Captain User11006" and not "finn_cs"
     And the remembered Discord message is edited to contain "🙋‍♂️ Captain User11006"
 
+  Scenario: a linked Telegram player in the rotation is pinged on Discord
+    Given the user is an admin of the chat
+    And a Discord server "10003" named "Server Three" with channel "100031" named "lobby" and member "jo_cs" named "Jo" with id "100030000000000001"
+    And Discord channel "100031" is linked to the chat
+    When user 11007 sends "/hi"
+    Then the bot replies "Hello to you too, User11007!"
+    When the user sends "/link_user @user11007 discord:jo_cs"
+    Then the bot replies "Linked User11007 to Discord user jo_cs."
+    When the user sends "/rollcall_add_player User11007" mentioning user 11007 as "User11007"
+    Then the bot replies "Added 1 players to rollcall."
+    When the user sends "/rollcall"
+    Then the bot reply links "User11007" to "tg://user?id=11007"
+    And Discord channel "100031" receives a bot message containing "<@100030000000000001>" with buttons "Joining, Maybe/Later, No"
+    And Discord channel "100011" receives a bot message containing "<@100030000000000001>" with buttons "Joining, Maybe/Later, No"
+    When the user sends "/rollcall_remove_player User11007" mentioning user 11007 as "User11007"
+    Then the bot replies "Poof! They're gone!"
+
   Scenario: a linked player added by Telegram username is pinged on both platforms
     Given the user is an admin of the chat
     And a Discord server "10004" named "Server Four" with channel "100041" named "lobby" and member "max_cs" named "Max" with id "100040000000000001"

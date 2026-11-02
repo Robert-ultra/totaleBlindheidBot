@@ -31,6 +31,11 @@ def step_discord_server(context: Context, guild_id: str, name: str, channel_id: 
     helpers.discord_define_guild(guild_id, name, [{"id": channel_id, "name": channel}])
 
 
+@given('a Discord server "(?P<guild_id>\\d+)" named "(?P<name>[^"]*)" with channels "(?P<first_id>\\d+)" named "(?P<first>[^"]*)" and "(?P<second_id>\\d+)" named "(?P<second>[^"]*)"')
+def step_discord_server_two_channels(context: Context, guild_id: str, name: str, first_id: str, first: str, second_id: str, second: str) -> None:
+    helpers.discord_define_guild(guild_id, name, [{"id": first_id, "name": first}, {"id": second_id, "name": second}])
+
+
 @given('a Discord server "(?P<guild_id>\\d+)" named "(?P<name>[^"]*)" with channel "(?P<channel_id>\\d+)" named "(?P<channel>[^"]*)" where the bot lacks "(?P<perms>[^"]*)"')
 def step_discord_server_lacking(context: Context, guild_id: str, name: str, channel_id: str, channel: str, perms: str) -> None:
     deny: List[str] = [p.strip() for p in perms.split(",")]
@@ -190,6 +195,13 @@ def step_channel_receives_bot_message(context: Context, channel_id: str) -> None
     new: List[Dict[str, Any]] = _new_messages(context, channel_id, _is_bot_message)
     hits = [m for m in new if _is_bot_message(m) and m["content"] == context.text]
     assert hits, f"Expected the bot message {context.text!r} in channel {channel_id}, got {[(m['method'], m['content']) for m in new]}"
+
+
+@then('Discord channel "(?P<channel_id>\\d+)" gets the private answer "(?P<text>[^"]+)"')
+def step_channel_private_answer(context: Context, channel_id: str, text: str) -> None:
+    new: List[Dict[str, Any]] = _new_messages(context, channel_id, _is_bot_message)
+    hits = [m for m in new if m["content"] == text and m["params"].get("flags") == 64]
+    assert hits, f"Expected the ephemeral answer {text!r} in channel {channel_id}, got {[(m['method'], m['content'], m['params'].get('flags')) for m in new]}"
 
 
 @then('Discord channel "(?P<channel_id>\\d+)" receives nothing')

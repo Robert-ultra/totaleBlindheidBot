@@ -218,6 +218,29 @@ Feature: linking Telegram and Discord users
     Then the bot reply contains "User9122"
     And the bot reply does not contain "ivy"
 
+  Scenario: a Discord-only player's games are found under their Steam name
+    Given a chat with id 9013
+    And a user with id 9999 and first name "Admin"
+    And the user is an admin of the chat
+    And a Discord server "9013" named "Server" with channel "90131" named "general" and member "kit_cs" named "Kit" with id "901300000000000001"
+    And Discord channel "90131" is linked to the chat
+    When Discord user "kit_cs" named "Kit" with id "901300000000000001" says "gl hf" in channel "90131"
+    Then the bot replies "kit_cs: gl hf"
+    When the user sends "/steam_user_id discord:kit_cs 76561198000009013"
+    Then the bot replies "Steam user ID(s) for kit_cs has been set to 76561198000009013"
+    When Steam mappings are refreshed
+    And Steam reports user "76561198000009013" playing CS2 as "Kit" with score "13-7" on map "Vertigo"
+    And Steam reports user "76561198000009013" stopped playing
+    Then chat 9013 eventually receives a new Steam message "🏆 Kit won a game on Vertigo (Competitive): 1️⃣3️⃣-7️⃣"
+    When the user sends "/game_history Kit"
+    Then the bot replies:
+      """
+      Game history for Kit
+      🏆 Vertigo · Competitive · 13-7
+      """
+    When the user sends "/stats Kit"
+    Then the bot reply starts with "Competitive stats for Kit"
+
   Scenario: a Discord-only player's games are found under their Discord username
     Given a chat with id 9014
     And a user with id 9999 and first name "Admin"

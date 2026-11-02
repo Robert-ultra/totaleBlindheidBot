@@ -82,6 +82,22 @@ Feature: scheduling rollcalls across Telegram and Discord
     And the bot reply does not contain "gwen_cs"
     And Discord channel "101011" receives a bot message containing "🙋‍♂️ User11102" with buttons "Joining, Maybe/Later, No"
 
+  Scenario: cancelling on Telegram retires every Discord copy
+    When the user sends "/schedule 3 hours"
+    Then the bot reply starts with "Rollcall scheduled for"
+    When the latest bot message in Discord channel "101021" is remembered
+    And the user sends "/cancel"
+    Then the bot replies "Scheduled rollcall cancelled."
+    And the remembered Discord message is edited to contain "Rollcall scheduled for" without buttons
+    And Discord channel "101011" receives a bot message
+      """
+      Scheduled rollcall cancelled.
+      """
+    And Discord channel "101021" receives a bot message
+      """
+      Scheduled rollcall cancelled.
+      """
+
   Scenario: a Discord user sets their timezone on Discord and schedules in it
     When Discord user "hana_cs" named "Hana" with id "101010000000000008" runs "/timezone" in channel "101011"
     Then Discord channel "101011" receives a bot message
