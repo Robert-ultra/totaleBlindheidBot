@@ -1,8 +1,6 @@
 import { Bot } from 'node-telegram-bot-api';
-import { ExtendedMessage } from '../MessageRouter.js';
+import { Command } from '../MessageRouter.js';
+import { userDisplayName } from '../dao/UserDAO.js';
 
-export default (bot: Bot, msg: ExtendedMessage): void => {
-    const who: string = msg.from?.first_name || msg.from?.username || 'stranger';
-
-    msg.reply(`Hello to you too, ${who}!`);
-};
+export default (bot: Bot, cmd: Command): Promise<unknown> =>
+    cmd.reply(`Hello to you too, ${userDisplayName(cmd.user)}!`);

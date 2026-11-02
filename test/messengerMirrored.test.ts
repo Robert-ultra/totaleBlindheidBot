@@ -5,7 +5,7 @@ import ChatLinkDAO from '../dao/ChatLinkDAO.js';
 import RelayedMessageDAO, { RelayedMessage } from '../dao/RelayedMessageDAO.js';
 import DiscordService from '../discord/DiscordService.js';
 import { bold, fmt } from '../format.js';
-import { editMirrored, sendMirrored } from '../messenger.js';
+import { Broadcast, editDiscordCopies, editMirrored, rememberCopies, sendMirrored } from '../messenger.js';
 
 const text = fmt`${bold('Ann')} is playing`;
 
@@ -106,4 +106,31 @@ test('a failed Telegram edit fails the call and leaves the copies alone', async 
 
     assert.equal(find.mock.callCount(), 0);
     assert.deepEqual(calls.map(call => (call as unknown[])[0]), ['editMessageText']);
+});
+
+test('a broadcast\'s Discord copies are remembered under its Telegram message', async () => {
+    const record = mock.method(RelayedMessageDAO.prototype, 'record', async () => undefined);
+    const sent = {
+        telegram: { message_id: 50 },
+        discord: [{ where: { platform: 'discord', channel_id: 'a', message_id: 'copy-in-a' } }]
+    } as unknown as Broadcast;
+
+    await rememberCopies(-7, sent, 'Ann');
+    await rememberCopies(-7, { discord: sent.discord }, 'Ann');
+
+    assert.deepEqual(record.mock.calls.map(call => call.arguments), [[
+        { platform: 'telegram', chat_id: '-7', message_id: '50' },
+        'Ann',
+        [{ platform: 'discord', chat_id: 'a', message_id: 'copy-in-a', kind: 'bot' }]
+    ]]);
+});
+
+test('Discord copies of a message not relayed are left alone', async () => {
+    const calls: unknown[] = [];
+    DiscordService.instance = fakeDiscord(calls);
+    mock.method(RelayedMessageDAO.prototype, 'find', async () => undefined);
+
+    await editDiscordCopies(-7, 50, 'Go!');
+
+    assert.deepEqual(calls, []);
 });

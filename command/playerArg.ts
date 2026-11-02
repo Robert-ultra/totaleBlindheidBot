@@ -1,4 +1,4 @@
-import { ExtendedMessage } from '../MessageRouter.js';
+import { Command, ExtendedMessage } from '../MessageRouter.js';
 import GameHistoryDAO, { ChatPlayer } from '../dao/GameHistoryDAO.js';
 import UserDAO from '../dao/UserDAO.js';
 import { parseDiscordRef } from '../discord/users.js';
@@ -80,8 +80,8 @@ export const textMention = async (msg: ExtendedMessage): Promise<MentionRef | un
 // Resolve a command's optional player argument to the user whose history to show. Returns null and
 // replies with the reason itself when the reference matches nothing or is ambiguous, so callers can
 // simply bail out on null.
-export const resolvePlayerTarget = async (dao: GameHistoryDAO, msg: ExtendedMessage): Promise<PlayerTarget | null> => {
-    const mention = await textMention(msg);
+export const resolvePlayerTarget = async (dao: GameHistoryDAO, msg: Command): Promise<PlayerTarget | null> => {
+    const mention = msg.platform === 'telegram' ? await textMention(msg as ExtendedMessage) : undefined;
     const argument = msg.command?.argument ?? '';
 
     // No player named at all: the common case, so skip the roster lookup entirely.
@@ -89,7 +89,7 @@ export const resolvePlayerTarget = async (dao: GameHistoryDAO, msg: ExtendedMess
         return { user_id: msg.user.id };
     }
 
-    const players = mention ? [] : await dao.getChatPlayers(msg.chat.id);
+    const players = mention ? [] : await dao.getChatPlayers(msg.chat_id);
     const match = matchPlayerArgument(players, argument, mention);
     switch (match.kind) {
         case 'self':
@@ -97,10 +97,10 @@ export const resolvePlayerTarget = async (dao: GameHistoryDAO, msg: ExtendedMess
         case 'player':
             return { user_id: match.user_id, name: match.name };
         case 'none':
-            msg.reply(`I don't have any recorded games for "${match.needle}" in this chat.`);
+            await msg.reply(`I don't have any recorded games for "${match.needle}" in this chat.`);
             return null;
         case 'ambiguous':
-            msg.reply(`"${match.needle}" matches multiple players: ${match.names.join(', ')}. Please be more specific.`);
+            await msg.reply(`"${match.needle}" matches multiple players: ${match.names.join(', ')}. Please be more specific.`);
             return null;
     }
 };

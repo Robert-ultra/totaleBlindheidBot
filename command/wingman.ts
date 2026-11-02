@@ -5,8 +5,9 @@ import { asFormatted, bold, Formatted } from '../format.js';
 import RollcallPlayerDAO from '../dao/RollcallPlayerDAO.js';
 import { mentionUsers, presenceMarkers, withTags } from '../presence.js';
 import { trackTaggedMessage } from '../taggedMessages.js';
-import { broadcast } from '../messenger.js';
+import { broadcast, rememberCopies } from '../messenger.js';
 import { withDiscordTags } from '../discord/render.js';
+import { userDisplayName } from '../dao/UserDAO.js';
 
 const dao = new RollcallPlayerDAO();
 
@@ -23,7 +24,9 @@ export default (bot: Bot, cmd: Command): Promise<unknown> =>
             // Prefix each tag with the player's 🟢/🟡/🔴/😶‍🌫️ presence, kept up to date for a while
             // like rollcalls and schedules.
             const head: Formatted = asFormatted(`${pickRandom(QUOTES)}\n`);
-            return broadcast(bot, cmd, withTags(head, players, users, markers), withDiscordTags(head, players, users))
-                .then(sent => sent.telegram ? trackTaggedMessage(sent.telegram, head, players, false) : undefined);
+            return broadcast(bot, cmd, withTags(head, players, users, markers), withDiscordTags(head, players, users, markers))
+                .then(sent => rememberCopies(cmd.chat_id, sent, userDisplayName(cmd.user))
+                    .catch((err: Error) => console.error('Could not remember the Discord copies of a wingman call:', err))
+                    .then(() => sent.telegram ? trackTaggedMessage(sent.telegram, head, players, false) : undefined));
         }))
         .catch((err: Error) => cmd.reply(bold(err.toString())));
