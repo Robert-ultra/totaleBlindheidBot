@@ -191,8 +191,11 @@ def inject_edited_message(text: str, chat_id: int, user: Dict[str, Any], message
         "text": text,
     }
     if reply_to_message_id is not None:
-        edited["reply_to_message"] = {"message_id": int(reply_to_message_id), "date": int(time.time()),
-                                      "chat": {"id": int(chat_id), "type": "group"}}
+        edited["reply_to_message"] = {
+            "message_id": int(reply_to_message_id),
+            "date": int(time.time()),
+            "chat": {"id": int(chat_id), "type": "group"},
+        }
     requests.post(f"{TELEGRAM_MOCK_URL}/test/inject", json={"edited_message": edited}, timeout=5).raise_for_status()
 
 

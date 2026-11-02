@@ -72,11 +72,8 @@ def _inject(context: Context, channel_id: str, content: str, author: Dict[str, A
 
 def _copy_of(channel_id: str, text: str) -> Optional[str]:
     """The id of the message showing `text` in a channel: the bot's copy, or what a Discord user sent there."""
-    return next(
-        (m["message_id"] for m in helpers.discord_outbox(channel_id)
-         if m["method"] in ("executeWebhook", "createMessage") and m["content"].endswith(text)),
-        None,
-    )
+    sent = [m for m in helpers.discord_outbox(channel_id) if m["method"] in ("executeWebhook", "createMessage")]
+    return next((m["message_id"] for m in sent if m["content"].endswith(text)), None)
 
 
 @when('Discord user "(?P<username>[^"]*)" named "(?P<name>[^"]*)" with id "(?P<user_id>\\d+)" replies "(?P<text>[^"]*)" to "(?P<replied>[^"]*)" in channel "(?P<channel_id>\\d+)"')
