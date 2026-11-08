@@ -232,7 +232,7 @@ router.route('hi', hiHandler, {
 });
 router.route('rollcall', rollcallHandler, {
     helpText: 'Anyone wanna play?',
-    discord: {}
+    discord: { argument: { name: 'time', description: 'When, e.g. "in 2 hours", "21:00" or "tomorrow 20:30".' } }
 });
 router.route('schedule', scheduleHandler, {
     helpText: 'Schedule a rollcall for a specific time.',

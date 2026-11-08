@@ -36,6 +36,20 @@ Feature: rollcalls and wingman calls across Telegram and Discord
     And Discord channel "100011" receives a bot message containing "🙋‍♂️ alice" with buttons "Joining, Maybe/Later, No"
     And Discord channel "100021" receives a bot message containing "🙋‍♂️ alice" with buttons "Joining, Maybe/Later, No"
 
+  Scenario: a Discord rollcall with a time schedules it everywhere
+    When Discord user "alice" named "Alice" with id "100010000000000002" runs "/rollcall" with time "3 hours" in channel "100011"
+    Then the bot reply starts with "Rollcall scheduled for"
+    And the bot reply contains "🙋‍♂️ alice"
+    And Discord channel "100011" receives a bot message containing "Rollcall scheduled for" with buttons "I'm in, Maybe, No"
+    And Discord channel "100021" receives a bot message containing "Rollcall scheduled for" with buttons "I'm in, Maybe, No"
+    When Discord user "alice" named "Alice" with id "100010000000000002" runs "/cancel" in channel "100011"
+    Then the bot replies "Scheduled rollcall cancelled."
+
+  Scenario: a Discord rollcall with text that isn't a time is still a rollcall
+    When Discord user "alice" named "Alice" with id "100010000000000002" runs "/rollcall" with time "lets go" in channel "100011"
+    Then the bot reply offers a "Joining" button
+    And Discord channel "100011" receives a bot message containing "🙋‍♂️ alice" with buttons "Joining, Maybe/Later, No"
+
   Scenario: a tap on Discord updates every copy
     When the user sends "/rollcall"
     Then the bot reply contains "🙋‍♂️ Captain"
