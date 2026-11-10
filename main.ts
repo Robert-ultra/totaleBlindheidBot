@@ -338,8 +338,8 @@ bot.on('message', (ctx: Context) => {
         return;
     }
     userDao.fromTelegram(msg.from)
-        .then(user => {
-            userDao.addUserChat(user.id, msg.chat.id)
+        .then(async user => {
+            await userDao.addUserChat(user.id, msg.chat.id)
                 .catch((err: Error) => console.error('Error adding user chat:', err));
             router.handle(msg, user);
             relayFromTelegram(bot, msg).catch((err: Error) => console.error('Error relaying Telegram message:', err));
