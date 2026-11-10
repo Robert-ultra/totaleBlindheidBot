@@ -11,7 +11,6 @@ Feature: CS2 competitive stats
     When Steam mappings are refreshed
     And Steam reports user "76561198000001110" playing CS2 with score "13-7" on map "Inferno"
     And Steam reports user "76561198000001110" stopped playing
-    And 8 seconds pass
     Then chat 2201 eventually receives a new Steam message containing "won a game"
     When the user sends "/stats"
     Then the bot reply contains "Competitive games"
@@ -26,7 +25,6 @@ Feature: CS2 competitive stats
     When Steam mappings are refreshed
     And Steam reports user "76561198000001120" playing CS2 as "Charlie" with score "13-7" on map "Nuke"
     And Steam reports user "76561198000001120" stopped playing
-    And 8 seconds pass
     Then chat 2202 eventually receives a new Steam message containing "won a game"
     When user 6121 sends "/stats Charlie"
     Then the bot reply contains "Competitive stats for"
@@ -44,7 +42,6 @@ Feature: CS2 competitive stats
     When Steam mappings are refreshed
     And Steam reports user "76561198000001140" playing CS2 as "Delta" with score "13-7" on map "Ancient"
     And Steam reports user "76561198000001140" stopped playing
-    And 8 seconds pass
     Then chat 2204 eventually receives a new Steam message containing "won a game"
     When user 6141 sends "/stats @user6140"
     Then the bot reply contains "Competitive stats for"

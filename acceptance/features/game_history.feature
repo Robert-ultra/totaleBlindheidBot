@@ -26,7 +26,6 @@ Feature: CS2 game history
     Then the bot replies "Your Steam user ID(s) has been set to 76561198000000912"
     When Steam mappings are refreshed
     And Steam reports user "76561198000000912" playing CS2 with score "14-16" on map "Mirage"
-    And a moment passes
     And Steam reports user "76561198000000912" playing CS2 with score "1-0" on map "Mirage"
     Then chat 2103 eventually receives a new Steam message containing "lost a game"
     When the user sends "/game_history"
@@ -40,7 +39,6 @@ Feature: CS2 game history
     Then the bot replies "Your Steam user ID(s) has been set to 76561198000000913"
     When Steam mappings are refreshed
     And Steam reports user "76561198000000913" playing CS2 with score "15-15" on map "Nuke"
-    And a moment passes
     And Steam reports user "76561198000000913" playing CS2 with score "1-0" on map "Nuke"
     Then chat 2104 eventually receives a new Steam message containing "tied a game"
     When the user sends "/game_history"
@@ -55,9 +53,7 @@ Feature: CS2 game history
     When Steam mappings are refreshed
     And Steam reports user "76561198000000914" playing CS2 with score "10-5" on map "Inferno"
     And Steam reports user "76561198000000914" stopped playing
-    And a moment passes
     And Steam reports user "76561198000000914" playing CS2 with score "12-5" on map "Inferno"
-    And a moment passes
     And Steam reports user "76561198000000914" playing CS2 with score "1-0" on map "Inferno"
     Then chat 2105 eventually receives a new Steam message containing "won a game"
     When the user sends "/game_history"
@@ -116,7 +112,7 @@ Feature: CS2 game history
     And Steam reports user "76561198000000950" stopped playing
     Then chat 2108 eventually receives a new Steam message containing "won a game"
     When Steam reports user "76561198000000951" stopped playing
-    And 8 seconds pass
+    And the matches of Steam user "76561198000000951" have been recorded
     When the user sends "/game_history"
     Then the bot reply contains "16-14"
     And the bot reply contains "5-3"
@@ -128,9 +124,7 @@ Feature: CS2 game history
     Then the bot replies "Your Steam user ID(s) has been set to 76561198000000960"
     When Steam mappings are refreshed
     And Steam reports user "76561198000000960" playing CS2 summarised as "Competitive Inferno 5-3" with score "5-3" on map "Inferno"
-    And a moment passes
     And Steam reports user "76561198000000960" playing CS2 summarised as "Competitive Inferno 8-3" with score "8-3" on map "Inferno"
-    And a moment passes
     Then chat 2109 has not received a Steam message containing "won a game"
     When Steam reports user "76561198000000960" playing CS2 summarised as "Competitive Inferno 1-0" with score "1-0" on map "Inferno"
     Then chat 2109 eventually receives a new Steam message containing "won a game"
@@ -167,11 +161,10 @@ Feature: CS2 game history
     When Steam mappings are refreshed
     And Steam reports user "76561198000000980" playing CS2 with score "13-7" on map "Vertigo"
     And Steam reports user "76561198000000980" stopped playing
-    And 8 seconds pass
     Then chat 2111 eventually receives a new Steam message containing "won a game"
     When Steam reports user "76561198000000980" playing CS2 with score "13-7" on map "Vertigo"
     And Steam reports user "76561198000000980" stopped playing
-    And 8 seconds pass
+    And the matches of Steam user "76561198000000980" have been recorded
     Then chat 2111 has received 2 Steam messages containing "won a game"
 
   Scenario: a flaky score dip does not split a match
@@ -189,7 +182,7 @@ Feature: CS2 game history
     And Steam reports user "76561198000000990" playing CS2 with score "8-3" on map "Inferno"
     And Steam reports user "76561198000000990" stopped playing
     Then chat 2112 eventually receives a new Steam message containing "won a game"
-    When 8 seconds pass
+    When the matches of Steam user "76561198000000990" have been recorded
     Then chat 2112 has received 1 Steam messages containing "won a game"
     When the user sends "/game_history"
     Then the bot reply contains "8-3"
@@ -204,7 +197,6 @@ Feature: CS2 game history
     When Steam mappings are refreshed
     And Steam reports user "76561198000001010" playing CS2 as "Alpha" with score "13-7" on map "Vertigo"
     And Steam reports user "76561198000001010" stopped playing
-    And 8 seconds pass
     Then chat 2114 eventually receives a new Steam message containing "won a game"
     When user 6011 sends "/game_history Alpha"
     Then the bot reply contains "Game history for"
@@ -229,7 +221,6 @@ Feature: CS2 game history
     Then the bot replies "Your Steam user ID(s) has been set to 76561198000000991"
     When Steam mappings are refreshed
     And Steam reports user "76561198000000991" playing CS2 with score "14-16" on map "Mirage"
-    And a moment passes
     And Steam reports user "76561198000000991" playing CS2 with score "1-0" on map "Mirage"
     And Steam reports user "76561198000000991" playing CS2 with score "2-0" on map "Mirage"
     Then chat 2113 eventually receives a new Steam message containing "lost a game"

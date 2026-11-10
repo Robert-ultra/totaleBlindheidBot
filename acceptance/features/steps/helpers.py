@@ -6,7 +6,7 @@ the MariaDB backend lives here so the step files stay declarative.
 import json
 import os
 import time
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, TypeVar
 
 import pymysql
 import requests
@@ -35,6 +35,20 @@ _APP_TABLES: List[str] = [
 # How long to wait for the bot to poll an update and produce a reply.
 REPLY_TIMEOUT: float = float(os.environ.get("REPLY_TIMEOUT", "15"))
 POLL_INTERVAL: float = 0.25
+# How long nothing must happen before "the bot does not ..." is believed.
+QUIET_WINDOW: float = 3.0
+
+T = TypeVar("T")
+
+
+def wait_until(probe: Callable[[], T], timeout: float = REPLY_TIMEOUT, interval: float = POLL_INTERVAL) -> T:
+    """Poll `probe` until it returns something truthy or `timeout` passes; return its last result."""
+    deadline: float = time.monotonic() + timeout
+    while True:
+        result: T = probe()
+        if result or time.monotonic() >= deadline:
+            return result
+        time.sleep(interval)
 
 
 # ---------------------------------------------------------------------------
@@ -52,24 +66,26 @@ def db_conn() -> Any:
     )
 
 
+def db_rows(sql: str, args: Tuple[Any, ...] = ()) -> List[Tuple[Any, ...]]:
+    conn = db_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sql, args)
+            return list(cur.fetchall())
+    finally:
+        conn.close()
+
+
 def wait_for_db(timeout: int = 90) -> None:
     """Wait until MariaDB is up and the bot has created the schema."""
-    deadline: float = time.time() + timeout
-    last_err: Optional[Exception] = None
-    while time.time() < deadline:
+    def schema_exists() -> bool:
         try:
-            conn = db_conn()
-            try:
-                with conn.cursor() as cur:
-                    cur.execute("SHOW TABLES LIKE 'user'")
-                    if cur.fetchone():
-                        return
-            finally:
-                conn.close()
-        except Exception as exc:  # noqa: BLE001
-            last_err = exc
-        time.sleep(1)
-    raise RuntimeError(f"Timed out waiting for MariaDB schema: {last_err}")
+            return bool(db_rows("SHOW TABLES LIKE 'user'"))
+        except pymysql.MySQLError:
+            return False
+
+    if not wait_until(schema_exists, timeout, interval=1):
+        raise RuntimeError("Timed out waiting for MariaDB schema")
 
 
 def age_game_updates(hours: int) -> None:
@@ -365,13 +381,7 @@ def wait_for_callback_answer(
     baseline_count: int, timeout: float = REPLY_TIMEOUT
 ) -> List[Dict[str, Any]]:
     """Wait until a new answerCallbackQuery is recorded; return the new tail."""
-    deadline: float = time.time() + timeout
-    while time.time() < deadline:
-        answers: List[Dict[str, Any]] = get_callback_answers()
-        if len(answers) > baseline_count:
-            return answers[baseline_count:]
-        time.sleep(POLL_INTERVAL)
-    return get_callback_answers()[baseline_count:]
+    return wait_until(lambda: get_callback_answers()[baseline_count:], timeout)
 
 
 def get_outbox(chat_id: Optional[int] = None) -> List[Dict[str, Any]]:
@@ -385,34 +395,68 @@ def wait_for_new_message(
     chat_id: int, baseline_count: int, timeout: float = REPLY_TIMEOUT
 ) -> List[Dict[str, Any]]:
     """Wait until the chat's outbox grows past `baseline_count`; return the new tail."""
-    deadline: float = time.time() + timeout
-    while time.time() < deadline:
-        outbox: List[Dict[str, Any]] = get_outbox(chat_id)
-        if len(outbox) > baseline_count:
-            return outbox[baseline_count:]
-        time.sleep(POLL_INTERVAL)
-    return get_outbox(chat_id)[baseline_count:]
+    return wait_until(lambda: get_outbox(chat_id)[baseline_count:], timeout)
 
 
 def expect_no_new_message(
-    chat_id: int, baseline_count: int, wait: float = 3.0
+    chat_id: int, baseline_count: int, wait: float = QUIET_WINDOW
 ) -> List[Dict[str, Any]]:
-    """Confirm that no new outbound message arrives within `wait` seconds."""
-    deadline: float = time.time() + wait
-    while time.time() < deadline:
-        outbox: List[Dict[str, Any]] = get_outbox(chat_id)
-        if len(outbox) > baseline_count:
-            return outbox[baseline_count:]
-        time.sleep(POLL_INTERVAL)
-    return []
+    """Whatever the bot sends within `wait` seconds; empty when it stays quiet."""
+    return wait_until(lambda: get_outbox(chat_id)[baseline_count:], wait)
 
 
 # ---------------------------------------------------------------------------
 # Steam control interactions
 # ---------------------------------------------------------------------------
 
+def _steam_persona_requests() -> List[List[str]]:
+    resp = requests.get(f"{STEAM_CONTROL_URL}/steam/personas", timeout=5)
+    resp.raise_for_status()
+    return resp.json()["requests"]
+
+
 def steam_refresh() -> None:
+    """Reload the bot's Steam mappings and wait until it tracks every linked Steam id."""
+    linked: set = {row[0] for row in db_rows("SELECT steam_id FROM user_steam_id")}
+    baseline: int = len(_steam_persona_requests())
     requests.post(f"{STEAM_CONTROL_URL}/steam/refresh", timeout=5).raise_for_status()
+    if not wait_until(lambda: any(linked <= set(ids) for ids in _steam_persona_requests()[baseline:])):
+        raise AssertionError(f"The bot never started tracking Steam ids {sorted(linked)}")
+
+
+def _steam_presence(steam_id: str) -> Optional[Tuple[Any, ...]]:
+    rows = db_rows(
+        "SELECT playing, map, raw_score FROM presence_event WHERE steam_id = %s ORDER BY id DESC LIMIT 1",
+        (steam_id,),
+    )
+    return rows[0] if rows else None
+
+
+def steam_report(steam_id: str, user: Dict[str, Any]) -> None:
+    """Report a Steam presence and, for a linked account, wait until the bot has recorded it, so
+    consecutive reports about different accounts are seen in the order they were made."""
+    steam_emit_user(steam_id, user)
+    if not db_rows("SELECT 1 FROM user_steam_id WHERE steam_id = %s", (steam_id,)):
+        return
+    presence: Dict[str, str] = {p["key"]: p["value"] for p in user.get("rich_presence", [])}
+    playing: bool = str(user.get("gameid")) == "730"
+    expected: Tuple[Any, ...] = (1, presence.get("game:map"), presence.get("game:score"))
+
+    def recorded() -> bool:
+        last: Optional[Tuple[Any, ...]] = _steam_presence(steam_id)
+        return last == expected if playing else (last is None or not last[0])
+
+    if not wait_until(recorded):
+        raise AssertionError(f"The bot never recorded {user} for Steam id {steam_id}; last: {_steam_presence(steam_id)}")
+
+
+def steam_matches_finalized(steam_id: str) -> bool:
+    """Whether every presence the bot recorded for the account has been folded into a match."""
+    return not db_rows(
+        "SELECT 1 FROM presence_event e LEFT JOIN match_stream_cursor c ON c.steam_id = e.steam_id "
+        "WHERE e.steam_id = %s AND e.id > COALESCE(c.finalized_event_id, 0) LIMIT 1",
+        (steam_id,),
+    )
 
 
 def steam_emit_user(steam_id: str, user: Dict[str, Any]) -> None:
@@ -546,20 +590,9 @@ def discord_outbox(channel_id: Optional[str] = None) -> List[Dict[str, Any]]:
 def discord_wait_for_new(channel_id: str, baseline_count: int, timeout: float = REPLY_TIMEOUT, accept: Callable[[Dict[str, Any]], bool] = lambda message: True) -> List[Dict[str, Any]]:
     """Wait until the Discord channel's outbox gains an entry `accept` takes (an interaction's
     acknowledgement lands before its reply); return the whole new tail."""
-    deadline: float = time.time() + timeout
-    while time.time() < deadline:
-        new: List[Dict[str, Any]] = discord_outbox(channel_id)[baseline_count:]
-        if any(accept(m) for m in new):
-            return new
-        time.sleep(POLL_INTERVAL)
+    wait_until(lambda: any(accept(m) for m in discord_outbox(channel_id)[baseline_count:]), timeout)
     return discord_outbox(channel_id)[baseline_count:]
 
 
-def discord_expect_no_new(channel_id: str, baseline_count: int, wait: float = 3.0) -> List[Dict[str, Any]]:
-    deadline: float = time.time() + wait
-    while time.time() < deadline:
-        outbox: List[Dict[str, Any]] = discord_outbox(channel_id)
-        if len(outbox) > baseline_count:
-            return outbox[baseline_count:]
-        time.sleep(POLL_INTERVAL)
-    return []
+def discord_expect_no_new(channel_id: str, baseline_count: int, wait: float = QUIET_WINDOW) -> List[Dict[str, Any]]:
+    return wait_until(lambda: discord_outbox(channel_id)[baseline_count:], wait)

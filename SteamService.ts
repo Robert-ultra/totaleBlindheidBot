@@ -244,7 +244,8 @@ class SteamService {
         this.client.on('user', (sid: any, user: any) => {
             // Not awaited (steam-user's emitter is synchronous); catch here so a transient
             // failure (e.g. a DB blip) can't become an unhandled rejection and kill the process.
-            this.handleUserUpdate(sid.getSteamID64(), user)
+            // One account's updates run in series: each builds on what the previous one stored.
+            this.withLock(`update_${sid.getSteamID64()}`, () => this.handleUserUpdate(sid.getSteamID64(), user))
                 .catch(err => console.error(`Error handling Steam user update for ${sid.getSteamID64()}:`, err));
         });
 

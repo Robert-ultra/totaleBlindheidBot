@@ -35,8 +35,7 @@ Feature: Steam game-presence updates
     When Steam mappings are refreshed
     And Steam reports user "76561198000000030" playing CS2 with score "16-14" on map "Inferno"
     Then chat 2003 receives a Steam message containing "Score:"
-    When a moment passes
-    And Steam reports user "76561198000000030" playing CS2 with no details
+    When Steam reports user "76561198000000030" playing CS2 with no details
     Then the latest Steam message in chat 2003 still contains "Score:"
 
   Scenario: a bare relaunch after a closed session goes back to green
@@ -49,9 +48,8 @@ Feature: Steam game-presence updates
     Then chat 2004 receives a Steam message containing "Score:"
     When Steam reports user "76561198000000040" stopped playing
     Then the Steam message in chat 2004 is edited to contain "🔴"
-    When a moment passes
-    And Steam reports user "76561198000000040" playing CS2 with no details
-    Then the latest Steam message in chat 2004 still contains "🟢"
+    When Steam reports user "76561198000000040" playing CS2 with no details
+    Then the Steam message in chat 2004 is edited to contain "🟢"
 
   Scenario: round outcomes are tracked in the live message
     Given a chat with id 2005
@@ -61,8 +59,7 @@ Feature: Steam game-presence updates
     When Steam mappings are refreshed
     And Steam reports user "76561198000000050" playing CS2 with score "1-0" on map "Inferno"
     Then chat 2005 receives a Steam message containing "Rounds: 🎖️"
-    When a moment passes
-    And Steam reports user "76561198000000050" playing CS2 with score "1-1" on map "Inferno"
+    When Steam reports user "76561198000000050" playing CS2 with score "1-1" on map "Inferno"
     Then the Steam message in chat 2005 is edited to contain "Rounds: 🎖️☠️"
 
   Scenario: a finished match is listed above the live game state for the session
@@ -73,9 +70,7 @@ Feature: Steam game-presence updates
     When Steam mappings are refreshed
     And Steam reports user "76561198000000060" playing CS2 with score "13-8" on map "Vertigo"
     Then chat 2006 receives a Steam message containing "is playing Counter-Strike"
-    When a moment passes
-    And Steam reports user "76561198000000060" playing CS2 with score "1-0" on map "Vertigo"
-    And a moment passes
+    When Steam reports user "76561198000000060" playing CS2 with score "1-0" on map "Vertigo"
     And Steam reports user "76561198000000060" playing CS2 with score "2-0" on map "Vertigo"
     Then the Steam message in chat 2006 is edited to contain "🏆 Competitive: Vertigo 1️⃣3️⃣:8️⃣"
 

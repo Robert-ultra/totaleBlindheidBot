@@ -20,6 +20,8 @@ let activeClient = null;
 // State of the most recent steamGuard request, exposed over the control API.
 const steamGuardState = { requested: false, called: false, code: null };
 
+const personaRequests = [];
+
 class FakeSteamUser extends EventEmitter {
     constructor(options) {
         super();
@@ -44,7 +46,11 @@ class FakeSteamUser extends EventEmitter {
 
     setPersona() { /* no-op */ }
 
-    getPersonas() { /* no-op: presence is driven via the control server */ }
+    // Presence is driven via the control server; the requests only tell behave which accounts
+    // the bot tracks by now.
+    getPersonas(steamIds) {
+        personaRequests.push(steamIds.map(String));
+    }
 
     logOff() { /* no-op */ }
 }
@@ -99,6 +105,8 @@ const controlServer = http.createServer(async (req, res) => {
         sendJson(res, 200, { ok: true, hasClient: !!activeClient });
     } else if (req.method === 'GET' && url === '/steam/steamguard/state') {
         sendJson(res, 200, { ok: true, ...steamGuardState });
+    } else if (req.method === 'GET' && url === '/steam/personas') {
+        sendJson(res, 200, { ok: true, requests: personaRequests });
     } else if (!activeClient) {
         // All remaining endpoints act on the live client.
         sendJson(res, 503, { ok: false, error: 'no client' });

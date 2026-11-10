@@ -1,7 +1,6 @@
 """Steps for the Discord side: defining servers, speaking as Discord users, asserting on what the bot
 posted there. The Telegram side of the same scenarios uses telegram_steps.py."""
 import re
-import time
 from typing import Any, Callable, Dict, List, Optional
 
 from behave import given, when, then, use_step_matcher
@@ -316,17 +315,15 @@ def step_discord_taps(context: Context, username: str, name: str, user_id: str, 
 
 def _wait_for_discord_edit(context: Context, matches: Any, description: str) -> None:
     remembered: Dict[str, str] = context.discord_remembered
-    deadline: float = time.time() + helpers.REPLY_TIMEOUT
-    edits: List[Dict[str, Any]] = []
-    while time.time() < deadline:
-        edits = [
+
+    def edits() -> List[Dict[str, Any]]:
+        return [
             m for m in helpers.discord_outbox(remembered["channel_id"])
             if m["method"] == "editMessage" and m["message_id"] == remembered["message_id"]
         ]
-        if any(matches(m) for m in edits):
-            return
-        time.sleep(helpers.POLL_INTERVAL)
-    raise AssertionError(f"The remembered Discord message was never edited {description}; edits: {_describe(edits)}")
+
+    assert helpers.wait_until(lambda: any(matches(m) for m in edits())), \
+        f"The remembered Discord message was never edited {description}; edits: {_describe(edits())}"
 
 
 @then('the remembered Discord message is edited to contain "(?P<text>[^"]+)"')
@@ -348,17 +345,14 @@ def step_discord_edited_without_buttons(context: Context, text: str) -> None:
 @then('the Discord tap is answered with "(?P<text>[^"]+)"')
 def step_discord_tap_answered(context: Context, text: str) -> None:
     remembered: Dict[str, str] = context.discord_remembered
-    deadline: float = time.time() + helpers.REPLY_TIMEOUT
-    answers: List[str] = []
-    while time.time() < deadline:
-        answers = [
+
+    def answers() -> List[str]:
+        return [
             m["content"] for m in helpers.discord_outbox(remembered["channel_id"])
             if m["method"] == "interactionCallback" and m["params"].get("type") == 4
         ]
-        if text in answers:
-            return
-        time.sleep(helpers.POLL_INTERVAL)
-    raise AssertionError(f"Expected the tap to be answered with {text!r}, got {answers}")
+
+    assert helpers.wait_until(lambda: text in answers()), f"Expected the tap to be answered with {text!r}, got {answers()}"
 
 
 @when("the scheduled rollcall's time has come")
@@ -439,9 +433,10 @@ def step_channel_bot_unreacts(context: Context, channel_id: str, emoji: str, tex
 
 @then('Discord channel "(?P<channel_id>\\d+)" sees no reaction changes from the bot')
 def step_channel_no_bot_reactions(context: Context, channel_id: str) -> None:
-    time.sleep(3)
-    new: List[Dict[str, Any]] = helpers.discord_outbox(channel_id)[_baseline(context, channel_id):]
-    changes: List[Dict[str, Any]] = [m for m in new if m["method"] in ("addReaction", "removeReaction")]
+    changes: List[Dict[str, Any]] = helpers.wait_until(
+        lambda: [m for m in helpers.discord_outbox(channel_id)[_baseline(context, channel_id):] if m["method"] in ("addReaction", "removeReaction")],
+        helpers.QUIET_WINDOW,
+    )
     assert not changes, f"Expected no reaction changes from the bot in channel {channel_id}, got {_describe(changes)}"
 
 
@@ -461,16 +456,14 @@ def step_discord_user_says_in_thread(context: Context, username: str, name: str,
 @then('the bot has joined that thread')
 def step_bot_joined_thread(context: Context) -> None:
     joined = lambda m: m["method"] == "joinThread"
-    deadline: float = time.time() + helpers.REPLY_TIMEOUT
-    while time.time() < deadline:
-        if any(joined(m) for m in helpers.discord_outbox(context.discord_thread)):
-            return
-        time.sleep(helpers.POLL_INTERVAL)
-    raise AssertionError(f"The bot never joined thread {context.discord_thread}")
+    assert helpers.wait_until(lambda: any(joined(m) for m in helpers.discord_outbox(context.discord_thread))), \
+        f"The bot never joined thread {context.discord_thread}"
 
 
 @then('no slash command reply is deleted in Discord channel "(?P<channel_id>\\d+)"')
 def step_no_reply_deleted(context: Context, channel_id: str) -> None:
-    time.sleep(2)
-    deleted = [m for m in helpers.discord_outbox(channel_id)[_baseline(context, channel_id):] if m["method"] == "deleteReply"]
+    deleted = helpers.wait_until(
+        lambda: [m for m in helpers.discord_outbox(channel_id)[_baseline(context, channel_id):] if m["method"] == "deleteReply"],
+        helpers.QUIET_WINDOW,
+    )
     assert not deleted, f"A slash command reply was deleted in channel {channel_id}"
