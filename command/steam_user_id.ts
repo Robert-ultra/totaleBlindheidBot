@@ -2,7 +2,9 @@ import { Bot, CallbackQuery, Message } from 'node-telegram-bot-api';
 import { Command, ExtendedMessage } from '../MessageRouter.js';
 import UserDAO, { userDisplayName } from '../dao/UserDAO.js';
 import { formatError } from '../utils.js';
-import { messageText, Part } from '../format.js';
+import { asFormatted, Formatted, Part } from '../format.js';
+import { broadcast } from '../messenger.js';
+import { toDiscordMarkdown } from '../discord/markdown.js';
 import { notFoundMessage, parseDiscordRef, resolveDiscordUser } from '../discord/users.js';
 
 const dao = new UserDAO();
@@ -133,11 +135,10 @@ export const handleSteamIdReply = (bot: Bot, msg: Message): boolean => {
         return false;
     }
 
-    const reply = (text: Part) => bot.api.sendMessage({
-        chat_id: msg.chat.id,
-        ...messageText(text),
-        reply_parameters: { message_id: msg.message_id }
-    });
+    const reply = (text: Part) => {
+        const formatted: Formatted = asFormatted(text);
+        return broadcast(bot, { chat_id: msg.chat.id }, formatted, toDiscordMarkdown(formatted), { replyTo: msg.message_id });
+    };
     setForUser(target.user_id, target.name, msg.text, reply)
         .then(done => done && prompts.delete(key))
         .catch((err: Error) => reply(formatError(err)));

@@ -19,7 +19,8 @@ const discordCommand = (argument: string, user: User, replies: Part[]): Command 
     chat_id: -9,
     user,
     command: { name: 'x', argument, argumentTokens: argument ? argument.split(' ') : [] },
-    reply: async (text: Part) => replies.push(text)
+    reply: async (text: Part) => replies.push(text),
+    replyPrivately: async () => undefined
 });
 
 afterEach(() => mock.restoreAll());

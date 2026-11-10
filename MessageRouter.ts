@@ -1,7 +1,9 @@
 import { Bot, Message } from 'node-telegram-bot-api';
 import { ChatInputCommandInteraction } from 'discord.js';
 import { formatError } from './utils.js';
-import { messageText, Part } from './format.js';
+import { asFormatted, Formatted, messageText, Part } from './format.js';
+import { broadcast } from './messenger.js';
+import { toDiscordMarkdown } from './discord/markdown.js';
 import { User } from './dao/UserDAO.js';
 import { ChatLink } from './dao/ChatLinkDAO.js';
 
@@ -17,7 +19,10 @@ export interface Command {
     chat_id: number;
     user: User;
     command: CommandContext;
+    // Reaches the chat and every Discord channel linked to it.
     reply: (text: Part) => Promise<unknown>;
+    // Reaches only where the command was given.
+    replyPrivately: (text: Part) => Promise<unknown>;
     telegram?: Message;
     discord?: { interaction: ChatInputCommandInteraction; link: ChatLink };
 }
@@ -25,7 +30,6 @@ export interface Command {
 export interface ExtendedMessage extends Message, Command {
     platform: 'telegram';
     telegram: Message;
-    reply: (text: Part) => Promise<Message>;
 }
 
 export type CommandHandler<T extends Command = Command> = (bot: Bot, cmd: T) => void | Promise<void> | Promise<any> | any;
@@ -84,6 +88,13 @@ class MessageRouter {
         };
     }
 
+    private _mirroredReply(cmd: Command): (text: Part) => Promise<unknown> {
+        return (text: Part) => {
+            const formatted: Formatted = asFormatted(text);
+            return broadcast(this._bot, cmd, formatted, toDiscordMarkdown(formatted));
+        };
+    }
+
     handle(msg: Message, user: User): void {
         if (msg.reply_to_message && this._replyHandlers.some(handler => handler(this._bot, msg))) {
             return;
@@ -105,7 +116,8 @@ class MessageRouter {
         extendedMsg.platform = 'telegram';
         extendedMsg.chat_id = msg.chat.id;
         extendedMsg.telegram = msg;
-        extendedMsg.reply = (text: Part) => this._bot.api.sendMessage({
+        extendedMsg.reply = this._mirroredReply(extendedMsg);
+        extendedMsg.replyPrivately = (text: Part) => this._bot.api.sendMessage({
             chat_id: msg.chat.id,
             ...messageText(text),
             reply_parameters: { message_id: msg.message_id }
@@ -133,8 +145,10 @@ class MessageRouter {
             user,
             command: this._context(route.command, argument),
             reply,
+            replyPrivately: reply,
             discord: { interaction, link }
         };
+        cmd.reply = this._mirroredReply(cmd);
         try {
             await route.handler(this._bot, cmd);
         } catch (ex: any) {

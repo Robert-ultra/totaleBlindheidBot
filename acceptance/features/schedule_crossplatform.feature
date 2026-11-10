@@ -31,11 +31,11 @@ Feature: scheduling rollcalls across Telegram and Discord
     And Discord channel "101021" receives a bot message starting with "Scheduled rollcall cancelled."
     And Discord channel "101011" receives a bot message starting with "Scheduled rollcall cancelled."
 
-  Scenario: a Discord schedule without a time is answered only there
+  Scenario: a Discord schedule without a time is answered everywhere
     When Discord user "alice" named "Alice" with id "101010000000000002" runs "/schedule" in channel "101011"
     Then Discord channel "101011" receives a bot message starting with "Please specify a time to schedule the rollcall."
-    And the bot sends no reply
-    And Discord channel "101021" receives nothing
+    And the bot replies "Please specify a time to schedule the rollcall."
+    And Discord channel "101021" receives a bot message starting with "Please specify a time to schedule the rollcall."
 
   Scenario: cancelling from Discord retires every copy
     When the user sends "/schedule 3 hours"
@@ -48,10 +48,10 @@ Feature: scheduling rollcalls across Telegram and Discord
     When Discord user "bob" named "Bob" with id "101010000000000003" taps "rsvp:yes" on the remembered Discord message
     Then the Discord tap is answered with "This RSVP has expired."
 
-  Scenario: cancelling with nothing scheduled is answered where asked
+  Scenario: cancelling with nothing scheduled is answered everywhere
     When Discord user "alice" named "Alice" with id "101010000000000002" runs "/cancel" in channel "101011"
     Then Discord channel "101011" receives a bot message starting with "No rollcall scheduled for this group."
-    And the bot sends no reply
+    And the bot replies "No rollcall scheduled for this group."
 
   Scenario: when the time comes the rollcall takes over on every platform
     When the user sends "/schedule 3 hours"
@@ -125,7 +125,7 @@ Feature: scheduling rollcalls across Telegram and Discord
       """
       Your timezone has been set to +02:00
       """
-    And the bot sends no reply
+    And the bot replies "Your timezone has been set to +02:00"
     When Discord user "hana_cs" named "Hana" with id "101010000000000008" runs "/schedule" with time "3 hours" in channel "101011"
     Then the bot reply starts with "Rollcall scheduled for"
     And the bot reply contains "GMT+2"

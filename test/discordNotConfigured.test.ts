@@ -10,7 +10,8 @@ const message = (replies: unknown[]): ExtendedMessage => ({
     chat: { id: 1, type: 'group' },
     from: { id: 2, is_bot: false, first_name: 'Admin' },
     command: { name: 'x', argument: '123', argumentTokens: ['123'] },
-    reply: async (text: unknown) => { replies.push(text); }
+    reply: async (text: unknown) => { replies.push(text); },
+    replyPrivately: async (text: unknown) => { replies.push(text); }
 } as unknown as ExtendedMessage);
 
 [['link_chat', linkChat], ['unlink_chat', unlinkChat], ['link_user', linkUser]].forEach(([name, handler]) => {

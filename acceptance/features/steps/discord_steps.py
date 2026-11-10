@@ -203,6 +203,15 @@ def step_channel_receives_no_bot_containing(context: Context, channel_id: str, t
     assert not hits, f"Expected no bot message containing {text!r} in channel {channel_id}, got {_describe(hits)}"
 
 
+@then('Discord channel "(?P<channel_id>\\d+)" stays free of bot messages')
+def step_channel_no_bot_messages(context: Context, channel_id: str) -> None:
+    posted: List[Dict[str, Any]] = helpers.wait_until(
+        lambda: _bot_messages(helpers.discord_outbox(channel_id)[_baseline(context, channel_id):]),
+        helpers.QUIET_WINDOW,
+    )
+    assert not posted, f"Expected no bot message in channel {channel_id}, got {_describe(posted)}"
+
+
 @then('Discord channel "(?P<channel_id>\\d+)" receives a bot message')
 def step_channel_receives_bot_message(context: Context, channel_id: str) -> None:
     new: List[Dict[str, Any]] = _new_messages(context, channel_id, _is_bot_message)

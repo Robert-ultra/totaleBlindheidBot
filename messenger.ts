@@ -4,7 +4,7 @@ import RelayedMessageDAO, { CopyKind, MessageRef, RelayedMessage } from './dao/R
 import { RsvpMessageWhere } from './dao/RsvpDAO.js';
 import DiscordService, { rsvpComponents } from './discord/DiscordService.js';
 import { toDiscordMarkdown } from './discord/markdown.js';
-import { Formatted, messageText } from './format.js';
+import { asFormatted, Formatted, messageText, Part } from './format.js';
 import { Command } from './MessageRouter.js';
 import { keyboard, RsvpKeyboardKind } from './rsvp.js';
 
@@ -16,6 +16,8 @@ export type Target = Command | { chat_id: number };
 export interface BroadcastOptions {
     keyboard?: RsvpKeyboardKind;
     linkPreview?: boolean;
+    // The Telegram message to answer, when the target is not a command.
+    replyTo?: number;
 }
 
 export interface Broadcast {
@@ -23,16 +25,18 @@ export interface Broadcast {
     discord: { link: ChatLink; where: RsvpMessageWhere & { platform: 'discord' } }[];
 }
 
-// The sender's own platform gets its copy as the command's reply.
+// The sender's own platform gets its copy as the command's reply; a second reply to a Discord
+// command follows the first up rather than replacing it.
 export const broadcast = async (bot: Bot, target: Target, telegram: Formatted, discord: string, opts: BroadcastOptions = {}): Promise<Broadcast> => {
     const cmd: Command | undefined = 'platform' in target ? target : undefined;
     const result: Broadcast = { discord: [] };
+    const replyTo: number | undefined = cmd?.telegram?.message_id ?? opts.replyTo;
 
     try {
         result.telegram = await bot.api.sendMessage({
             chat_id: target.chat_id,
             ...messageText(telegram),
-            ...(cmd?.telegram ? { reply_parameters: { message_id: cmd.telegram.message_id } } : {}),
+            ...(replyTo !== undefined ? { reply_parameters: { message_id: replyTo } } : {}),
             ...(opts.keyboard ? { reply_markup: keyboard(opts.keyboard) } : {}),
             ...(opts.linkPreview === false ? { link_preview_options: { is_disabled: true } } : {})
         });
@@ -49,8 +53,9 @@ export const broadcast = async (bot: Bot, target: Target, telegram: Formatted, d
     const copies = await Promise.all(links.map(async link => {
         try {
             const origin = cmd?.discord && cmd.discord.link.discord_channel_id === link.discord_channel_id ? cmd.discord.interaction : undefined;
+            const answer = { content: discord, allowedMentions: { parse: ['users' as const] }, components: components ?? [] };
             const message_id: string = origin
-                ? (await origin.editReply({ content: discord, allowedMentions: { parse: ['users'] }, components: components ?? [] })).id
+                ? (await (origin.replied ? origin.followUp(answer) : origin.editReply(answer))).id
                 : await service.sendAsBot(link.discord_channel_id, discord, components);
             return { link, where: { platform: 'discord' as const, channel_id: link.discord_channel_id, message_id } };
         } catch (err) {
@@ -60,6 +65,18 @@ export const broadcast = async (bot: Bot, target: Target, telegram: Formatted, d
     }));
     result.discord.push(...copies.filter((copy): copy is Broadcast['discord'][number] => copy !== undefined));
     return result;
+};
+
+// For outcomes Telegram shows by editing a message Discord never got.
+export const tellDiscord = async (chat_id: number, text: Part): Promise<void> => {
+    const service: DiscordService | null = DiscordService.instance;
+    if (!service) {
+        return;
+    }
+    const content: string = toDiscordMarkdown(asFormatted(text));
+    const links: ChatLink[] = await chatLinkDao.getLinks(chat_id);
+    await Promise.all(links.map(link => service.sendAsBot(link.discord_channel_id, content)
+        .catch((err: Error) => console.error(`Could not post to Discord channel ${link.discord_channel_id}:`, err))));
 };
 
 type DiscordCopy = MessageRef & { kind: CopyKind };
