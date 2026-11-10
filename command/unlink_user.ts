@@ -16,7 +16,7 @@ export default async (bot: Bot, msg: ExtendedMessage): Promise<void> => {
         }
         const [first] = msg.command.argumentTokens;
         if (msg.command.argumentTokens.length !== 1) {
-            await msg.reply('Usage: /unlink_user @telegram_user');
+            await msg.reply('Usage: /unlink_user <Telegram username>');
             return;
         }
         const telegramUser: User | undefined = await resolveTelegramUser(msg, first);

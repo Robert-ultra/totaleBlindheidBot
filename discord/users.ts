@@ -31,9 +31,8 @@ export const resolveTelegramUser = async (msg: ExtendedMessage, argument: string
     const mention = msg.entities?.find(e => e.type === 'text_mention' && e.user);
     if (mention?.user) {
         return userDao.fromTelegram(mention.user);
-    } else if (argument?.startsWith('@') && argument.length > 1) {
-        const user_id: number | undefined = await userDao.getUserIdByUsername(argument.slice(1));
-        return user_id === undefined ? undefined : userDao.getUser(user_id);
     }
-    return undefined;
+    const username: string = (argument ?? '').replace(/^@/, '');
+    const user_id: number | undefined = username === '' ? undefined : await userDao.getUserIdByUsername(username);
+    return user_id === undefined ? undefined : userDao.getUser(user_id);
 };

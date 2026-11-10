@@ -50,3 +50,20 @@ Feature: Steam IDs for Discord users
       """
       Your Steam user ID(s) has been set to 76561198000009203
       """
+
+  Scenario: an admin sets a Discord user's Steam ID by bare username
+    When Discord user "uma_cs" named "Uma" with id "920100000000000003" runs "/hi" in channel "92011"
+    Then the bot replies "Hello to you too, uma_cs!"
+    When the user sends "/steam_user_id uma_cs 76561198000009204"
+    Then the bot replies "Steam user ID(s) for uma_cs has been set to 76561198000009204"
+
+  Scenario: a bare username shared by a Telegram and a Discord user means the Telegram user
+    When Discord user "user9206" named "Disco" with id "920100000000000004" runs "/hi" in channel "92011"
+    Then the bot replies "Hello to you too, user9206!"
+    When user 9206 sends "/hi"
+    Then the bot replies "Hello to you too, User9206!"
+    Given a user with id 9999 and first name "Admin"
+    When the user sends "/steam_user_id user9206 76561198000009206"
+    Then the bot replies "Steam user ID(s) for User9206 has been set to 76561198000009206"
+    When the user sends "/steam_user_id discord:user9206 76561198000009207"
+    Then the bot replies "Steam user ID(s) for user9206 has been set to 76561198000009207"

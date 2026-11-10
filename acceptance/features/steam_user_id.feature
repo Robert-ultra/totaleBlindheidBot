@@ -31,6 +31,17 @@ Feature: steam_user_id command
     When user 9999 sends "/steam_user_id @nobody_here 76561198000000014"
     Then the bot replies "I don't know @nobody_here."
 
+  Scenario: an admin sets a Steam ID for another user by bare username
+    Given a chat with id 1707
+    When user 5821 sends "/hi"
+    Then the bot replies "Hello to you too, User5821!"
+    When user 9999 sends "/steam_user_id user5821 76561198000000021"
+    Then the bot replies "Steam user ID(s) for User5821 has been set to 76561198000000021"
+    When user 9999 sends "/steam_user_id nobody_here 76561198000000022"
+    Then the bot replies "I don't know nobody_here."
+    When user 5822 sends "/steam_user_id user5821 76561198000000023"
+    Then the bot replies "Only the admin can set Steam IDs for other users."
+
   Scenario: a non-admin cannot set Steam IDs for someone else
     Given a chat with id 1704
     When user 5814 sends "/steam_user_id @user5811 76561198000000015"
