@@ -16,7 +16,41 @@ def _capture_steam_baseline(context: Context) -> None:
 
 @given('Steam account "{steam_id}" is not a friend of the bot')
 def step_steam_stranger(context: Context, steam_id: str) -> None:
-    helpers.steam_declare_strangers([steam_id])
+    helpers.steam_set_relationship(steam_id, "None")
+
+
+@given('Steam refuses friend requests to account "{steam_id}"')
+def step_steam_refuses(context: Context, steam_id: str) -> None:
+    helpers.steam_set_relationship(steam_id, "None", refuses=True)
+
+
+@given('the bot has a friend request out to Steam account "{steam_id}"')
+def step_steam_request_out(context: Context, steam_id: str) -> None:
+    helpers.steam_set_relationship(steam_id, "RequestInitiator")
+
+
+@given('Steam account "{steam_id}" has asked to be the bot\'s friend')
+@when('Steam account "{steam_id}" asks to be the bot\'s friend')
+def step_steam_asks(context: Context, steam_id: str) -> None:
+    helpers.steam_set_relationship(steam_id, "RequestRecipient")
+
+
+@when('the bot logs on to Steam again')
+def step_steam_logs_on(context: Context) -> None:
+    helpers.steam_refresh()
+
+
+@then('the bot sends Steam account "{steam_id}" a friend request')
+@then('the bot accepts the friend request of Steam account "{steam_id}"')
+def step_steam_befriended(context: Context, steam_id: str) -> None:
+    assert helpers.wait_until(lambda: steam_id in helpers.steam_friend_requests()), \
+        f"The bot never befriended Steam account {steam_id}; it asked {helpers.steam_friend_requests()}"
+
+
+@then('the bot sends Steam account "{steam_id}" no friend request')
+def step_steam_not_befriended(context: Context, steam_id: str) -> None:
+    assert not helpers.wait_until(lambda: steam_id in helpers.steam_friend_requests(), helpers.QUIET_WINDOW), \
+        f"The bot befriended Steam account {steam_id}"
 
 
 @when('Steam mappings are refreshed')
