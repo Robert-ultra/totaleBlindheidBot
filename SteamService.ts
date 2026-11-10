@@ -566,6 +566,15 @@ class SteamService {
         return steamIds.filter(steamId => this.client.myFriends[steamId] !== SteamUser.EFriendRelationship.Friend);
     }
 
+    // False when not logged on, as there is nobody to rename then.
+    setNickname(nickname: string): boolean {
+        if (!this.client.steamID) {
+            return false;
+        }
+        this.client.setPersona(SteamUser.EPersonaState.Online, nickname);
+        return true;
+    }
+
     profileUrl(): string | undefined {
         const steamId: string | undefined = this.client.steamID?.getSteamID64();
         return steamId === undefined ? undefined : `https://steamcommunity.com/profiles/${steamId}`;

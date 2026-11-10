@@ -459,6 +459,12 @@ def steam_matches_finalized(steam_id: str) -> bool:
     )
 
 
+def steam_nicknames() -> List[str]:
+    resp = requests.get(f"{STEAM_CONTROL_URL}/steam/nicknames", timeout=5)
+    resp.raise_for_status()
+    return resp.json()["nicknames"]
+
+
 def steam_declare_strangers(steam_ids: List[str]) -> None:
     requests.post(f"{STEAM_CONTROL_URL}/steam/strangers", json={"steamIds": steam_ids}, timeout=5).raise_for_status()
 

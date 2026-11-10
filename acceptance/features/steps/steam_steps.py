@@ -248,3 +248,14 @@ def step_steam_guard_callback(context: Context, code: str) -> None:
     assert state.get("called"), "Steam Guard callback was never invoked"
     assert state.get("code") == code, \
         f"Steam Guard callback got {state.get('code')!r}, expected {code!r}"
+
+
+@then('the bot\'s Steam nickname is "{nickname}"')
+def step_steam_nickname(context: Context, nickname: str) -> None:
+    assert helpers.wait_until(lambda: helpers.steam_nicknames()[-1:] == [nickname]), \
+        f"Expected the Steam nickname {nickname!r}, the bot set {helpers.steam_nicknames()}"
+
+
+@then('the bot has never been nicknamed "{nickname}" on Steam')
+def step_steam_never_nicknamed(context: Context, nickname: str) -> None:
+    assert nickname not in helpers.steam_nicknames(), f"The bot took the Steam nickname {nickname!r}"
