@@ -76,3 +76,12 @@ Feature: Steam IDs for Discord users
     And the bot reply offers a "vic_cs (Discord)" button
     When user 9999 named "Admin" taps the button containing "vic_cs"
     Then the bot replies "Reply to this message with the Steam ID(s) for vic_cs."
+
+  Scenario: the note about befriending the bot is seen on both platforms
+    Given Steam account "76561198000009208" is not a friend of the bot
+    When Discord user "wes_cs" named "Wes" with id "920100000000000006" runs "/steam_user_id" with ids "76561198000009208" in channel "92011"
+    Then Discord channel "92011" receives a bot message containing "76561198000009208 is not on my Steam friends list yet."
+    And the bot reply contains "add me on Steam: https://steamcommunity.com/profiles/76561190000000000"
+    When user 9209 sends "/steam_user_id 76561198000009208"
+    Then the bot reply contains "76561198000009208 is not on my Steam friends list yet."
+    And Discord channel "92011" receives a bot message containing "add me on Steam: https://steamcommunity.com/profiles/76561190000000000"

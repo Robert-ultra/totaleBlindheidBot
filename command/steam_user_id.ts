@@ -7,6 +7,7 @@ import { broadcast } from '../messenger.js';
 import { toDiscordMarkdown } from '../discord/markdown.js';
 import UserReferenceResolver from '../UserReferenceResolver.js';
 import UserPicker from '../UserPicker.js';
+import SteamService from '../SteamService.js';
 
 const dao = new UserDAO();
 const resolver = new UserReferenceResolver(dao);
@@ -30,13 +31,24 @@ const parseIds = (arg: string): string[] | null => {
     return ids.length > 0 && ids.every(id => /^\d{17}$/.test(id)) ? ids : null;
 };
 
+const friendNote = (ids: string[]): string => {
+    const steam: SteamService | null = SteamService.instance;
+    const strangers: string[] = steam?.notFriends(ids) ?? [];
+    const profile: string | undefined = steam?.profileUrl();
+    if (strangers.length === 0 || profile === undefined) {
+        return '';
+    }
+    return `\n\nNote: ${strangers.join(', ')} ${strangers.length === 1 ? 'is' : 'are'} not on my Steam friends list yet. `
+        + `I only get game updates from friends, so add me on Steam: ${profile}`;
+};
+
 const setForUser = (user_id: number, name: string, idsArg: string, reply: (text: Part) => Promise<unknown>): Promise<boolean> => {
     const ids = parseIds(idsArg);
     if (!ids) {
         return reply('Invalid Steam ID(s). Each must be a 17-digit number (SteamID64) starting with 7656.').then(() => false);
     }
     return dao.setSteamUserId(user_id, ids)
-        .then(() => reply(`Steam user ID(s) for ${name} has been set to ${ids.join(', ')}`))
+        .then(() => reply(`Steam user ID(s) for ${name} has been set to ${ids.join(', ')}${friendNote(ids)}`))
         .then(() => true);
 };
 
@@ -50,7 +62,7 @@ export default (bot: Bot, cmd: Command): void | Promise<unknown> => {
         return cmd.reply(SPECIFY_IDS);
     }
     return dao.setSteamUserId(cmd.user.id, ids)
-        .then(() => cmd.reply(`Your Steam user ID(s) has been set to ${ids.join(', ')}`))
+        .then(() => cmd.reply(`Your Steam user ID(s) has been set to ${ids.join(', ')}${friendNote(ids)}`))
         .catch((err: Error) => cmd.reply(formatError(err)));
 };
 
@@ -90,7 +102,7 @@ const handleTelegram = (bot: Bot, msg: ExtendedMessage): void => {
     const user_id: number = msg.user.id;
     console.log(`User ${user_id} set Steam ID(s) to ${ids.join(', ')}`);
     dao.setSteamUserId(user_id, ids)
-        .then(() => msg.reply(`Your Steam user ID(s) has been set to ${ids.join(', ')}`))
+        .then(() => msg.reply(`Your Steam user ID(s) has been set to ${ids.join(', ')}${friendNote(ids)}`))
         .catch((err: Error) => msg.reply(formatError(err)));
 };
 

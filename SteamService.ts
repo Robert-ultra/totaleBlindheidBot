@@ -558,6 +558,19 @@ class SteamService {
         }
     }
 
+    // Steam only reports what friends of the bot's account are playing. Empty while unknown.
+    notFriends(steamIds: string[]): string[] {
+        if (!this.friendsListLoaded) {
+            return [];
+        }
+        return steamIds.filter(steamId => this.client.myFriends[steamId] !== SteamUser.EFriendRelationship.Friend);
+    }
+
+    profileUrl(): string | undefined {
+        const steamId: string | undefined = this.client.steamID?.getSteamID64();
+        return steamId === undefined ? undefined : `https://steamcommunity.com/profiles/${steamId}`;
+    }
+
     submitSteamGuardCode(code: string): boolean {
         if (this.steamGuardCallback) {
             this.steamGuardCallback(code);

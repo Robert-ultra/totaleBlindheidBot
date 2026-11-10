@@ -459,6 +459,10 @@ def steam_matches_finalized(steam_id: str) -> bool:
     )
 
 
+def steam_declare_strangers(steam_ids: List[str]) -> None:
+    requests.post(f"{STEAM_CONTROL_URL}/steam/strangers", json={"steamIds": steam_ids}, timeout=5).raise_for_status()
+
+
 def steam_emit_user(steam_id: str, user: Dict[str, Any]) -> None:
     resp = requests.post(
         f"{STEAM_CONTROL_URL}/steam/user",
