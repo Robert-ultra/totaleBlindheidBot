@@ -7,11 +7,11 @@ Feature: rollcall player management
     When the user sends "/rollcall_add_player"
     Then the bot replies "Who would you like to add?"
 
-  Scenario: argument and mention counts must match
+  Scenario: a name nobody is known by cannot be added
     Given a chat with id 3002
     And a user with id 5702 and first name "Admin"
     When the user sends "/rollcall_add_player Charlie"
-    Then the bot replies "1 arguments contained 0 user mentions."
+    Then the bot replies "I don't know Charlie."
 
   Scenario: duplicate arguments are rejected
     Given a chat with id 3003
@@ -25,11 +25,27 @@ Feature: rollcall player management
     When the user sends "/rollcall_remove_player Ghost" mentioning user 888 as "Ghost"
     Then the bot replies "Who are they?"
 
-  Scenario: removing requires a matching mention
+  Scenario: removing a name that is not in the rollcall
     Given a chat with id 3006
     And a user with id 5706 and first name "Admin"
     When the user sends "/rollcall_remove_player Ghost"
-    Then the bot replies "1 arguments contained 0 user mentions."
+    Then the bot replies "Who are they?"
+
+  Scenario: a Telegram user is added and removed by bare username
+    Given a chat with id 3007
+    And a user with id 5707 and first name "Admin"
+    When user 5717 sends "/hi"
+    Then the bot replies "Hello to you too, User5717!"
+    When the user sends "/rollcall_add_player user5717"
+    Then the bot replies "Added 1 players to rollcall."
+    When the user sends "/rollcall_get_players"
+    Then the bot reply contains "User5717"
+    When the user sends "/rollcall_add_player User5717" mentioning user 5717 as "User5717"
+    Then the bot reply contains "already in the rollcall"
+    When the user sends "/rollcall_remove_player user5717"
+    Then the bot replies "Poof! They're gone!"
+    When the user sends "/rollcall_get_players"
+    Then the bot replies "No players in the rollcall."
 
   Scenario: full add, list, duplicate-guard and remove lifecycle
     Given a chat with id 3005

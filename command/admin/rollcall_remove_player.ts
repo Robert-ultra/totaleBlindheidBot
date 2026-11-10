@@ -12,7 +12,7 @@ export default (bot: Bot, msg: ExtendedMessage): void => {
         return;
     }
 
-    parsePlayerMentions(msg)
+    parsePlayerMentions(msg, true)
         .then(parsed => {
             if ('error' in parsed) {
                 msg.reply(parsed.error);

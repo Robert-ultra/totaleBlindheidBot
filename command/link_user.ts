@@ -10,7 +10,7 @@ import { NOT_CONFIGURED } from './link_chat.js';
 const userDao = new UserDAO();
 
 export const ADMIN_ONLY = 'Only a group admin can link or unlink users.';
-export const USAGE = 'Usage: /link_user @telegram_user discord:<Discord username>';
+export const USAGE = 'Usage: /link_user <Telegram username> <Discord username>';
 
 export default async (bot: Bot, msg: ExtendedMessage): Promise<void> => {
     try {
@@ -23,8 +23,8 @@ export default async (bot: Bot, msg: ExtendedMessage): Promise<void> => {
         }
 
         const [first, second] = msg.command.argumentTokens;
-        const discord_username: string | undefined = second === undefined ? undefined : parseDiscordRef(second);
-        if (msg.command.argumentTokens.length !== 2 || discord_username === undefined) {
+        const discord_username: string = parseDiscordRef(second ?? '') ?? (second ?? '').replace(/^@/, '').toLowerCase();
+        if (msg.command.argumentTokens.length !== 2 || discord_username === '') {
             await msg.reply(USAGE);
             return;
         }

@@ -5,9 +5,10 @@ import { formatError } from '../utils.js';
 import { asFormatted, Formatted, Part } from '../format.js';
 import { broadcast } from '../messenger.js';
 import { toDiscordMarkdown } from '../discord/markdown.js';
-import { notFoundMessage, parseDiscordRef, resolveDiscordUser } from '../discord/users.js';
+import UserReferenceResolver from '../UserReferenceResolver.js';
 
 const dao = new UserDAO();
+const resolver = new UserReferenceResolver(dao);
 
 export const CALLBACK_PREFIX = 'steamid:';
 
@@ -54,10 +55,11 @@ export default (bot: Bot, cmd: Command): void | Promise<unknown> => {
 const handleTelegram = (bot: Bot, msg: ExtendedMessage): void => {
     const [first = '', ...rest] = msg.command.argumentTokens;
     const mention = msg.entities?.find(e => e.type === 'text_mention' && e.user);
-    const discord_username: string | undefined = parseDiscordRef(first);
     const admin: boolean = isAdmin(msg.from?.id);
+    // Anything but Steam IDs in front of more arguments names whose IDs those are.
+    const namesSomeone: boolean = rest.length > 0 && !/^[\d,]+$/.test(first);
 
-    if (mention?.user || first.startsWith('@') || discord_username !== undefined) {
+    if (mention?.user || namesSomeone) {
         if (!admin) {
             msg.reply(ADMIN_ONLY);
             return;
@@ -65,13 +67,9 @@ const handleTelegram = (bot: Bot, msg: ExtendedMessage): void => {
         const reply = (text: Part) => msg.reply(text);
         const done: Promise<unknown> = mention?.user
             ? dao.fromTelegram(mention.user).then(user => setForUser(user.id, mention.user!.first_name, msg.text!.slice(mention.offset + mention.length), reply))
-            : discord_username !== undefined
-                ? resolveDiscordUser(msg.chat.id, discord_username).then((user): Promise<unknown> => user === undefined
-                    ? msg.reply(notFoundMessage(discord_username))
-                    : setForUser(user.id, userDisplayName(user), rest.join(' '), reply))
-                : dao.getUserIdByUsername(first.slice(1)).then((user_id): Promise<unknown> => user_id === undefined
-                    ? msg.reply(`I don't know ${first}.`)
-                    : setForUser(user_id, first, rest.join(' '), reply));
+            : resolver.resolve(msg.chat.id, first).then((user): Promise<unknown> => user === undefined
+                ? msg.reply(UserReferenceResolver.unknown(first))
+                : setForUser(user.id, first.startsWith('@') ? first : userDisplayName(user), rest.join(' '), reply));
         done.catch((err: Error) => msg.reply(formatError(err)));
         return;
     } else if (admin && msg.command.argument === '') {

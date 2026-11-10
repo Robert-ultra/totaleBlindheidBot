@@ -47,6 +47,9 @@ Feature: CS2 competitive stats
     Then the bot reply contains "Competitive stats for"
     And the bot reply contains "Delta"
     And the bot reply contains "Competitive games"
+    When user 6141 sends "/stats user6140"
+    Then the bot reply contains "Competitive stats for"
+    And the bot reply contains "Delta"
 
   Scenario: stats for an unknown player is reported as such
     Given a chat with id 2203

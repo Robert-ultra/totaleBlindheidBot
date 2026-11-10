@@ -93,6 +93,19 @@ Feature: rollcalls and wingman calls across Telegram and Discord
     When the user sends "/rollcall_remove_player discord:erin_cs"
     Then the bot replies "Poof! They're gone!"
 
+  Scenario: a Discord user is added and removed by bare username
+    Given the user is an admin of the chat
+    When the user sends "/rollcall_add_player erin_cs"
+    Then the bot replies "Added 1 players to rollcall."
+    When the user sends "/rollcall_add_player discord:erin_cs"
+    Then the bot reply contains "already in the rollcall"
+    When the user sends "/rollcall"
+    Then Discord channel "100011" receives a bot message containing "<@100010000000000001>" with buttons "Joining, Maybe/Later, No"
+    When the user sends "/rollcall_remove_player erin_cs"
+    Then the bot replies "Poof! They're gone!"
+    When the user sends "/rollcall_add_player nobody_cs"
+    Then the bot replies "I don't know nobody_cs."
+
   Scenario: a wingman call from Discord reaches everyone
     When Discord user "alice" named "Alice" with id "100010000000000002" runs "/wingman" in channel "100021"
     Then the bot reply first line is one of

@@ -27,10 +27,9 @@ export type PlayerMatch =
 
 // Match a free-text player argument against an already-fetched chat roster. Kept pure (no IO) so
 // the matching rules can be unit-tested without a database. A tapped mention wins outright; an
-// empty argument means the sender. A bare word is matched case-insensitively against each player's
-// display name or username; a leading @ makes it an explicit username reference, matched against
-// usernames only (so it can't be dragged into ambiguity by an unrelated player's display name).
-// discord:<username> likewise matches Discord usernames only.
+// empty argument means the sender. A bare word is matched case-insensitively against Telegram
+// usernames, then display names, then Discord usernames; the first of those with a match wins.
+// A leading @ matches Telegram usernames only, discord:<username> Discord usernames only.
 export const matchPlayerArgument = (
     players: ChatPlayer[],
     argument: string,
@@ -48,10 +47,11 @@ export const matchPlayerArgument = (
     const discordOnly: string | undefined = parseDiscordRef(trimmed);
     const usernameOnly = trimmed.startsWith('@');
     const needle = discordOnly ?? (usernameOnly ? trimmed.slice(1) : trimmed).toLowerCase();
-    const matches: ChatPlayer[] = players.filter(p => discordOnly !== undefined
-        ? p.discord_username?.toLowerCase() === needle
-        : (!usernameOnly && (p.name.toLowerCase() === needle || p.discord_username?.toLowerCase() === needle))
-            || p.username?.toLowerCase() === needle);
+    const byTelegram: ChatPlayer[] = players.filter(p => p.username?.toLowerCase() === needle);
+    const byDiscord: ChatPlayer[] = players.filter(p => p.discord_username?.toLowerCase() === needle);
+    const byName: ChatPlayer[] = players.filter(p => p.name.toLowerCase() === needle);
+    const tiers: ChatPlayer[][] = discordOnly !== undefined ? [byDiscord] : usernameOnly ? [byTelegram] : [byTelegram, byName, byDiscord];
+    const matches: ChatPlayer[] = tiers.find(tier => tier.length > 0) ?? [];
 
     if (matches.length === 0) {
         return { kind: 'none', needle: trimmed };

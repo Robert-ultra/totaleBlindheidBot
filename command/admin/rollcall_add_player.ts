@@ -3,6 +3,7 @@ import { ExtendedMessage } from '../../MessageRouter.js';
 import { formatError } from '../../utils.js';
 import RollcallPlayerDAO from '../../dao/RollcallPlayerDAO.js';
 import { parsePlayerMentions } from './parsePlayerMentions.js';
+import { parseMention } from '../../mention.js';
 
 const dao = new RollcallPlayerDAO();
 
@@ -21,8 +22,10 @@ export default (bot: Bot, msg: ExtendedMessage): void => {
             const { players } = parsed;
             return dao.getRollcallPlayerUsernames(msg.chat.id)
                 .then((existingPlayers: string[]) => {
+                    const existingIds: (number | undefined)[] = existingPlayers.map(existing => parseMention(existing).id);
                     players.forEach(player => {
-                        if (existingPlayers.includes(player)) {
+                        const id: number | undefined = parseMention(player).id;
+                        if (existingPlayers.includes(player) || (id !== undefined && existingIds.includes(id))) {
                             throw new Error(`Player ${player} is already in the rollcall.`);
                         }
                     });

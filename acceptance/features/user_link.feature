@@ -1,6 +1,6 @@
 Feature: linking Telegram and Discord users
   A group admin records that a Telegram user and a Discord user are the same person. Discord people
-  are named as discord:<username> in commands; a Discord user who spoke before being linked keeps
+  are named by username in commands, optionally as discord:<username>; a Discord user who spoke before being linked keeps
   what was recorded about them, and the Telegram name takes over once they are linked.
 
   Scenario: only an admin can link users
@@ -14,9 +14,24 @@ Feature: linking Telegram and Discord users
     And a user with id 9102 and first name "Admin"
     And the user is an admin of the chat
     When the user sends "/link_user @alice"
-    Then the bot replies "Usage: /link_user @telegram_user discord:<Discord username>"
-    When the user sends "/link_user @alice bob"
-    Then the bot replies "Usage: /link_user @telegram_user discord:<Discord username>"
+    Then the bot replies "Usage: /link_user <Telegram username> <Discord username>"
+    When the user sends "/unlink_user"
+    Then the bot replies "Usage: /unlink_user <Telegram username>"
+
+  Scenario: users are linked and unlinked by bare usernames
+    Given a chat with id 9015
+    And a user with id 9125 and first name "Admin"
+    And the user is an admin of the chat
+    And a Discord server "9015" named "Server" with channel "90151" named "general" and member "bea" named "Bea" with id "901500000000000001"
+    And Discord channel "90151" is linked to the chat
+    When user 9126 sends "/hi"
+    Then the bot reply starts with "Hello to you too"
+    When the user sends "/link_user user9126 bea"
+    Then the bot replies "Linked User9126 to Discord user bea."
+    When the user sends "/unlink_user user9126"
+    Then the bot replies "Unlinked User9126 from Discord user bea."
+    When the user sends "/link_user stranger bea"
+    Then the bot reply starts with "I don't know stranger."
 
   Scenario: the Telegram user must be known
     Given a chat with id 9003

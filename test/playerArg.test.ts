@@ -35,11 +35,9 @@ test('a leading @ matches usernames only, never display names', () => {
     assert.deepEqual(matchPlayerArgument(roster, '@Bob'), { kind: 'none', needle: '@Bob' });
 });
 
-test('@name targets the username holder even when the bare name is another player', () => {
-    // "eve" is user 4's display name and user 5's username. Bare "eve" is ambiguous, but the
-    // explicit @eve unambiguously targets the username holder (user 5).
-    const bare = matchPlayerArgument(roster, 'eve');
-    assert.equal(bare.kind, 'ambiguous');
+test('a bare name goes to the Telegram username holder before anyone called that', () => {
+    // "eve" is user 4's display name and user 5's Telegram username.
+    assert.deepEqual(matchPlayerArgument(roster, 'eve'), { kind: 'player', user_id: 5, name: 'zed' });
     assert.deepEqual(matchPlayerArgument(roster, '@eve'), { kind: 'player', user_id: 5, name: 'zed' });
 });
 
@@ -68,6 +66,10 @@ const withDiscord: ChatPlayer[] = [
 
 test('a bare word matches a Discord username too', () => {
     assert.deepEqual(matchPlayerArgument([withDiscord[0]], 'KIT_CS'), { kind: 'player', user_id: 6, name: 'Kit' });
+});
+
+test('a bare name goes to the Telegram username holder before the Discord one', () => {
+    assert.deepEqual(matchPlayerArgument(withDiscord, 'kit_cs'), { kind: 'player', user_id: 7, name: 'Lee' });
 });
 
 test('discord:<username> matches Discord usernames only', () => {

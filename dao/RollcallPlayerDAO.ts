@@ -56,9 +56,10 @@ class RollcallPlayerDAO {
 
     removeRollcallPlayer(chat_id: number, username: string): Promise<boolean> {
         const inputUsername = checkNotEmpty(username);
+        const user_id: number | undefined = parseMention(inputUsername).id;
         return this._getRollcallPlayerRows(Number(checkNotEmpty(chat_id)))
             .then(rows => rows.find(row => {
-                if (this._playerMention(row) === inputUsername) {
+                if (this._playerMention(row) === inputUsername || (user_id !== undefined && Number(row.user_id) === user_id)) {
                     return true;
                 }
                 // Match the case where the stored player is a text mention and the input is just the name.
