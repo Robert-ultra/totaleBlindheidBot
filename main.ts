@@ -43,6 +43,7 @@ import linkUserHandler from './command/link_user.js';
 import unlinkUserHandler from './command/unlink_user.js';
 import deleteMatchRecordHandler, { handleDeleteMatchCallback, CALLBACK_PREFIX as DELETE_MATCH_CALLBACK_PREFIX } from './command/admin/delete_match_record.js';
 import rollcallAddPlayerHandler from './command/admin/rollcall_add_player.js';
+import RollcallPlayerPicker from './command/admin/RollcallPlayerPicker.js';
 import rollcallRemovePlayerHandler from './command/admin/rollcall_remove_player.js';
 import rollcallGetPlayersHandler from './command/admin/rollcall_get_players.js';
 
@@ -135,6 +136,7 @@ discordService?.onMessage((message, link) => relayFromDiscord(bot, message, link
 discordService?.onEdit((message, link) => relayDiscordEdit(bot, message, link));
 discordService?.onDelete((channel_id, message_id, link) => relayDiscordDeletion(bot, channel_id, message_id, link));
 const reactionMirror = new ReactionMirror(bot);
+const rollcallPlayerPicker = new RollcallPlayerPicker();
 discordService?.onReaction((channel_id, message_id, user_id, emoji, added) => reactionMirror.apply({
     ref: { platform: 'discord', chat_id: channel_id, message_id },
     user_ref: `discord:${user_id}`,
@@ -333,15 +335,8 @@ bot.on('message', (ctx: Context) => {
     }
     userDao.fromTelegram(msg.from)
         .then(user => {
-            if (steamEnabled) {
-                userDao.addUserChat(user.id, msg.chat.id)
-                    .then((added: boolean) => {
-                        if (added) {
-                            console.log(`Associated user ${user.id} with chat ${msg.chat.id} for Steam updates.`);
-                        }
-                    })
-                    .catch((err: Error) => console.error('Error adding user chat:', err));
-            }
+            userDao.addUserChat(user.id, msg.chat.id)
+                .catch((err: Error) => console.error('Error adding user chat:', err));
             router.handle(msg, user);
             relayFromTelegram(bot, msg).catch((err: Error) => console.error('Error relaying Telegram message:', err));
         })
@@ -366,6 +361,8 @@ bot.on('callback_query', (ctx: Context) => {
         return;
     } else if (query.data?.startsWith(STEAM_ID_CALLBACK_PREFIX)) {
         handleSteamIdCallback(bot, query);
+        return;
+    } else if (rollcallPlayerPicker.handle(bot, query)) {
         return;
     }
     handleRsvpCallback(query);

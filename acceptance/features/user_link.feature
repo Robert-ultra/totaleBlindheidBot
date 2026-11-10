@@ -195,7 +195,7 @@ Feature: linking Telegram and Discord users
     Then the bot replies "Hello to you too, User9121!"
     When the user sends "/steam_user_id"
     Then the bot reply starts with "Whose Steam ID(s) do you want to set?"
-    And the bot reply offers the buttons "Admin (@admin)", "hal_cs", "User9121 (@user9121)"
+    And the bot reply offers the buttons "Admin (@admin)", "hal_cs (Discord)", "User9121 (@user9121)"
     When the user sends "/link_user @user9121 discord:hal_cs"
     Then the bot replies "Linked User9121 to Discord user hal_cs."
     When the user sends "/steam_user_id"

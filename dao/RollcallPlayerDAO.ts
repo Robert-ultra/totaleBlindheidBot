@@ -13,6 +13,11 @@ interface RollcallPlayerRow extends RowDataPacket {
     display_name: string | null;
 }
 
+export interface RollcallPlayer {
+    id: number;
+    mention: string;
+}
+
 class RollcallPlayerDAO {
     // Reconstruct the legacy rotation mention string from a normalised player row.
     private _playerMention(row: RollcallPlayerRow): string {
@@ -44,6 +49,18 @@ class RollcallPlayerDAO {
 
     getRollcallPlayerUsernames(chat_id: number): Promise<string[]> {
         return this._getRollcallPlayerRows(chat_id).then(rows => rows.map(row => this._playerMention(row)));
+    }
+
+    getRollcallPlayers(chat_id: number): Promise<RollcallPlayer[]> {
+        return this._getRollcallPlayerRows(chat_id).then(rows => rows.map(row => ({ id: Number(row.id), mention: this._playerMention(row) })));
+    }
+
+    async removeRollcallPlayerById(chat_id: number, id: number): Promise<RollcallPlayer | undefined> {
+        const player: RollcallPlayer | undefined = (await this.getRollcallPlayers(chat_id)).find(candidate => candidate.id === id);
+        if (player) {
+            await query<ResultSetHeader>('DELETE FROM rollcall_player WHERE id = :id', { id });
+        }
+        return player;
     }
 
     addRollcallPlayer(chat_id: number, username: string): Promise<number> {

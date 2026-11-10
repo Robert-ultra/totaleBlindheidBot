@@ -67,3 +67,12 @@ Feature: Steam IDs for Discord users
     Then the bot replies "Steam user ID(s) for User9206 has been set to 76561198000009206"
     When the user sends "/steam_user_id discord:user9206 76561198000009207"
     Then the bot replies "Steam user ID(s) for user9206 has been set to 76561198000009207"
+
+  Scenario: the admin's menu marks Discord users
+    When Discord user "vic_cs" named "Vic" with id "920100000000000005" runs "/hi" in channel "92011"
+    Then the bot replies "Hello to you too, vic_cs!"
+    When the user sends "/steam_user_id"
+    Then the bot reply starts with "Whose Steam ID(s) do you want to set?"
+    And the bot reply offers a "vic_cs (Discord)" button
+    When user 9999 named "Admin" taps the button containing "vic_cs"
+    Then the bot replies "Reply to this message with the Steam ID(s) for vic_cs."
