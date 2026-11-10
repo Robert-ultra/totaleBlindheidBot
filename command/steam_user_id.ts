@@ -6,11 +6,13 @@ import { asFormatted, Formatted, Part } from '../format.js';
 import { broadcast } from '../messenger.js';
 import { toDiscordMarkdown } from '../discord/markdown.js';
 import UserReferenceResolver from '../UserReferenceResolver.js';
+import UserPicker from '../UserPicker.js';
 
 const dao = new UserDAO();
 const resolver = new UserReferenceResolver(dao);
 
 export const CALLBACK_PREFIX = 'steamid:';
+const picker = new UserPicker(CALLBACK_PREFIX);
 
 const ADMIN_ONLY = 'Only the admin can set Steam IDs for other users.';
 const SPECIFY_IDS = 'Please specify your Steam user ID(s) as SteamID64 (the 17-digit number starting with 7656), separated by commas if multiple.';
@@ -74,17 +76,7 @@ const handleTelegram = (bot: Bot, msg: ExtendedMessage): void => {
         return;
     } else if (admin && msg.command.argument === '') {
         dao.getChatUsers(msg.chat.id)
-            .then(users => bot.api.sendMessage({
-                chat_id: msg.chat.id,
-                text: 'Whose Steam ID(s) do you want to set?',
-                reply_parameters: { message_id: msg.message_id },
-                reply_markup: {
-                    inline_keyboard: users.map(user => [{
-                        text: user.username ? `${user.name} (@${user.username})` : user.name,
-                        callback_data: `${CALLBACK_PREFIX}${user.user_id}`
-                    }])
-                }
-            }))
+            .then(users => picker.ask(bot, msg, 'Whose Steam ID(s) do you want to set?', UserPicker.options(users)))
             .catch((err: Error) => msg.reply(formatError(err)));
         return;
     }
@@ -111,7 +103,7 @@ export const handleSteamIdCallback = (bot: Bot, query: CallbackQuery): void => {
         return;
     }
 
-    const user_id = Number(query.data.slice(CALLBACK_PREFIX.length));
+    const user_id = picker.picked(query);
     dao.getChatUsers(message.chat.id)
         .then(users => {
             const name: string = users.find(u => u.user_id === user_id)?.name ?? String(user_id);

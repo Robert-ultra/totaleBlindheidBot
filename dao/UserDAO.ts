@@ -34,6 +34,7 @@ export interface ChatUser {
     user_id: number;
     name: string;
     username?: string;
+    discord_only: boolean;
 }
 
 const USER_COLUMNS = 'id, telegram_id, discord_id, name, username, discord_name, discord_username';
@@ -262,7 +263,8 @@ class UserDAO {
             .map(row => ({
                 user_id: Number(row.user_id),
                 name: row.id == null ? String(row.user_id) : userDisplayName(userFromRow(row)),
-                username: row.username ?? undefined
+                username: row.username ?? undefined,
+                discord_only: row.telegram_id == null && row.discord_id != null
             }))
             .sort((a, b) => a.name.localeCompare(b.name));
     }

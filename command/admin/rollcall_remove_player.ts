@@ -3,12 +3,14 @@ import { ExtendedMessage } from '../../MessageRouter.js';
 import { formatError } from '../../utils.js';
 import RollcallPlayerDAO from '../../dao/RollcallPlayerDAO.js';
 import { parsePlayerMentions } from './parsePlayerMentions.js';
+import RollcallPlayerPicker from './RollcallPlayerPicker.js';
 
 const dao = new RollcallPlayerDAO();
+const picker = new RollcallPlayerPicker();
 
 export default (bot: Bot, msg: ExtendedMessage): void => {
     if ((msg.command?.argumentTokens || []).length === 0) {
-        msg.reply('Who would you like to remove?');
+        picker.askWhoToRemove(bot, msg).catch((err: Error) => msg.reply(formatError(err)));
         return;
     }
 
