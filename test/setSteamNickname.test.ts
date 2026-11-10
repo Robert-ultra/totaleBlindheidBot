@@ -4,7 +4,7 @@ import SteamUser from 'steam-user';
 import { Bot } from 'node-telegram-bot-api';
 import { ExtendedMessage } from '../MessageRouter.js';
 import SteamService from '../SteamService.js';
-import steamNickname from '../command/steam_nickname.js';
+import setSteamNickname from '../command/set_steam_nickname.js';
 
 const ADMIN = 9999;
 
@@ -26,9 +26,9 @@ const run = async (from: number, argument: string, loggedOn = true): Promise<{ r
             return loggedOn;
         }
     } as unknown as SteamService;
-    await steamNickname({} as Bot, {
+    await setSteamNickname({} as Bot, {
         from: { id: from },
-        command: { name: 'steam_nickname', argument, argumentTokens: argument.split(' ') },
+        command: { name: 'set_steam_nickname', argument, argumentTokens: argument.split(' ') },
         reply: async (text: unknown) => replies.push(text)
     } as unknown as ExtendedMessage);
     return { replies, nicknames };
@@ -43,7 +43,7 @@ test('nobody else can rename the bot', async () => {
 });
 
 test('the nickname must be given and fit Steam\'s 32 characters', async () => {
-    const usage = 'Usage: /steam_nickname <new nickname of at most 32 characters>';
+    const usage = 'Usage: /set_steam_nickname <new nickname of at most 32 characters>';
     assert.deepEqual(await run(ADMIN, ''), { replies: [usage], nicknames: [] });
     assert.deepEqual(await run(ADMIN, 'x'.repeat(33)), { replies: [usage], nicknames: [] });
     assert.deepEqual((await run(ADMIN, 'x'.repeat(32))).nicknames, ['x'.repeat(32)]);
@@ -53,9 +53,9 @@ test('the bot cannot be renamed while it is not logged on, or without Steam at a
     assert.deepEqual(await run(ADMIN, 'Blindganger', false), { replies: ['I am not logged on to Steam right now.'], nicknames: [] });
     const replies: unknown[] = [];
     process.env.STEAM_ADMIN_TELEGRAM_USER_ID = String(ADMIN);
-    await steamNickname({} as Bot, {
+    await setSteamNickname({} as Bot, {
         from: { id: ADMIN },
-        command: { name: 'steam_nickname', argument: 'Blindganger', argumentTokens: ['Blindganger'] },
+        command: { name: 'set_steam_nickname', argument: 'Blindganger', argumentTokens: ['Blindganger'] },
         reply: async (text: unknown) => replies.push(text)
     } as unknown as ExtendedMessage);
     assert.deepEqual(replies, ['I am not logged on to Steam right now.']);

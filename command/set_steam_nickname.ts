@@ -12,7 +12,7 @@ export default (bot: Bot, msg: ExtendedMessage): Promise<unknown> => {
     if (!isBotAdmin(msg.from?.id)) {
         return msg.reply('Only the admin can change my Steam nickname.');
     } else if (nickname === '' || nickname.length > MAX_LENGTH) {
-        return msg.reply(`Usage: /steam_nickname <new nickname of at most ${MAX_LENGTH} characters>`);
+        return msg.reply(`Usage: /set_steam_nickname <new nickname of at most ${MAX_LENGTH} characters>`);
     } else if (!steam?.setNickname(nickname)) {
         return msg.reply('I am not logged on to Steam right now.');
     }

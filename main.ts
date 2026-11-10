@@ -34,7 +34,7 @@ import wingmanHandler from './command/wingman.js';
 import steamUserIdHandler, { handleSteamIdCallback, handleSteamIdReply, CALLBACK_PREFIX as STEAM_ID_CALLBACK_PREFIX } from './command/steam_user_id.js';
 import steamUpdatesHandler from './command/steam_updates.js';
 import steamGuardHandler from './command/steam_guard.js';
-import steamNicknameHandler from './command/steam_nickname.js';
+import setSteamNicknameHandler from './command/set_steam_nickname.js';
 import gameHistoryHandler from './command/game_history.js';
 import statsHandler from './command/stats.js';
 import githubNotifyHandler from './command/github_notify.js';
@@ -281,7 +281,7 @@ if (steamEnabled) {
     router.route('steam_guard', steamGuardHandler, {
         helpText: 'Submit a Steam Guard code.'
     });
-    router.route('steam_nickname', steamNicknameHandler, {
+    router.route('set_steam_nickname', setSteamNicknameHandler, {
         helpText: 'Admin only: change my nickname on Steam.'
     });
     router.route('game_history', gameHistoryHandler, {
