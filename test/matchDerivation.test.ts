@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    segmentStream, findCoPlayers, deriveRounds, parseRawScore,
+    segmentStream, findCoPlayers, deriveRounds, parseRawScore, continuesMatch,
     PresenceEvent, DerivationConfig
 } from '../matchDerivation.js';
 
@@ -514,4 +514,20 @@ test('deriveRounds: unscored events (relaunches, bare presence) are ignored', ()
         ev(90, { map: 'Inferno', score: '1-1' })
     ];
     assert.deepEqual(deriveRounds(events), ['win', 'loss']);
+});
+
+test('a finished match goes on when the same map and mode are seen with both scores at or past it', () => {
+    const finished = { map: 'Inferno', mode: 'Competitive', score: '10-5' };
+    assert.equal(continuesMatch(finished, { map: 'inferno', mode: 'Competitive', score: '12-5' }), true);
+    assert.equal(continuesMatch(finished, { map: 'Inferno', score: '10-5' }), true);
+});
+
+test('a lower score, another map or mode, or no score at all is not the finished match going on', () => {
+    const finished = { map: 'Inferno', mode: 'Competitive', score: '10-5' };
+    assert.equal(continuesMatch(finished, { map: 'Inferno', mode: 'Competitive', score: '11-4' }), false);
+    assert.equal(continuesMatch(finished, { map: 'Inferno', mode: 'Competitive', score: '1-0' }), false);
+    assert.equal(continuesMatch(finished, { map: 'Mirage', mode: 'Competitive', score: '12-5' }), false);
+    assert.equal(continuesMatch(finished, { map: 'Inferno', mode: 'Wingman', score: '12-5' }), false);
+    assert.equal(continuesMatch(finished, { map: 'Inferno', mode: 'Competitive' }), false);
+    assert.equal(continuesMatch({ mode: 'Competitive', score: '10-5' }, { mode: 'Competitive', score: '12-5' }), false);
 });

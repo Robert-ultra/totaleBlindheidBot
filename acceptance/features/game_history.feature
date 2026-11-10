@@ -153,8 +153,8 @@ Feature: CS2 game history
     And the Steam message in chat 2110 is edited to contain "Bravo"
 
   Scenario: the same player's repeated match gets its own announcement
-    # Two distinct matches that happen to share map, mode, result and score must not be merged into
-    # one message just because they look alike — each real match is announced separately.
+    # Two distinct matches that share map, mode and result with scores a round apart must not be
+    # merged into one message just because they look alike — each real match is announced separately.
     Given a chat with id 2111
     And a user with id 5980 and first name "Tester"
     When the user sends "/steam_user_id 76561198000000980"
@@ -163,10 +163,13 @@ Feature: CS2 game history
     And Steam reports user "76561198000000980" playing CS2 with score "13-7" on map "Vertigo"
     And Steam reports user "76561198000000980" stopped playing
     Then chat 2111 eventually receives a new Steam message containing "won a game"
-    When Steam reports user "76561198000000980" playing CS2 with score "13-7" on map "Vertigo"
+    When Steam reports user "76561198000000980" playing CS2 with score "13-6" on map "Vertigo"
     And Steam reports user "76561198000000980" stopped playing
     And the matches of Steam user "76561198000000980" have been recorded
     Then chat 2111 has received 2 Steam messages containing "won a game"
+    When the user sends "/game_history"
+    Then the bot reply contains "13-7"
+    And the bot reply contains "13-6"
 
   Scenario: a flaky score dip does not split a match
     # A glitched/out-of-order presence tick briefly reporting a low score must not split one
@@ -276,3 +279,63 @@ Feature: CS2 game history
     And Steam reports user "76561198000001025" stopped playing
     Then chat 2122 eventually receives a new Steam message "🏆 Alpha won a game on Mirage (Competitive): 1️⃣3️⃣-3️⃣"
     And chat 2122 eventually receives a new Steam message "☠️ Bravo lost a game on Mirage (Competitive): 5️⃣-1️⃣3️⃣"
+
+  Scenario: a visit to the menu mid-match does not end the match
+    Given a chat with id 2130
+    And a user with id 6030 and first name "Tester"
+    When the user sends "/steam_user_id 76561198000001030"
+    Then the bot replies "Your Steam user ID(s) has been set to 76561198000001030"
+    When Steam mappings are refreshed
+    And Steam reports user "76561198000001030" playing CS2 with score "10-5" on map "Inferno"
+    And Steam reports user "76561198000001030" stopped playing
+    And Steam reports user "76561198000001030" in the CS2 menu
+    And Steam reports user "76561198000001030" playing CS2 with score "12-5" on map "Inferno"
+    Then chat 2130 has not received a Steam message containing "won a game"
+    When Steam reports user "76561198000001030" playing CS2 with score "1-0" on map "Inferno"
+    And Steam reports user "76561198000001030" playing CS2 with score "2-0" on map "Inferno"
+    Then chat 2130 eventually receives a new Steam message containing "won a game"
+    And chat 2130 has received 1 Steam messages containing "won a game"
+    When the user sends "/game_history"
+    Then the bot reply contains "12-5"
+
+  Scenario: a match announced as finished that goes on is withdrawn everywhere
+    Given a chat with id 2131
+    And a user with id 6031 and first name "Tester"
+    And the user is an admin of the chat
+    And a Discord server "2131" named "Reconnects" with channel "21311" named "general"
+    And Discord channel "21311" is linked to the chat
+    When the user sends "/steam_user_id 76561198000001031"
+    Then the bot replies "Your Steam user ID(s) has been set to 76561198000001031"
+    When Steam mappings are refreshed
+    And Steam reports user "76561198000001031" playing CS2 with score "10-5" on map "Inferno"
+    And Steam reports user "76561198000001031" playing CS2 with score "0-0" on map "Inferno"
+    Then chat 2131 eventually receives a new Steam message containing "won a game"
+    And Discord channel "21311" receives a bot message containing "won a game"
+    When Steam reports user "76561198000001031" playing CS2 with score "12-5" on map "Inferno"
+    Then the Steam message containing "won a game" in chat 2131 is deleted
+    And Discord channel "21311" sees the bot message containing "won a game" deleted
+    When the user sends "/game_history"
+    Then the bot replies "No game history yet."
+    When Steam reports user "76561198000001031" playing CS2 with score "13-5" on map "Inferno"
+    And Steam reports user "76561198000001031" stopped playing
+    And the matches of Steam user "76561198000001031" have been recorded
+    Then chat 2131 has received 2 Steam messages containing "won a game"
+    When the user sends "/game_history"
+    Then the bot reply contains "13-5"
+    And the bot reply does not contain "10-5"
+
+  Scenario: a player whose match goes on is taken off the announcement they shared
+    Given a chat with id 2132
+    When user 6032 sends "/steam_user_id 76561198000001032"
+    Then the bot reply contains "76561198000001032"
+    When user 6033 sends "/steam_user_id 76561198000001033"
+    Then the bot reply contains "76561198000001033"
+    When Steam mappings are refreshed
+    And Steam reports party "duo" member "76561198000001032" playing CS2 as "Alpha" with score "10-5" on map "Vertigo"
+    And Steam reports party "duo" member "76561198000001033" playing CS2 as "Bravo" with score "10-5" on map "Vertigo"
+    And Steam reports user "76561198000001033" stopped playing
+    And the matches of Steam user "76561198000001033" have been recorded
+    And Steam reports party "duo" member "76561198000001032" playing CS2 as "Alpha" with score "0-0" on map "Vertigo"
+    Then the Steam message in chat 2132 is edited to contain "Alpha and Bravo won a game"
+    When Steam reports party "duo" member "76561198000001032" playing CS2 as "Alpha" with score "12-5" on map "Vertigo"
+    Then the Steam message in chat 2132 is edited to "🏆 Bravo won a game on Vertigo (Competitive): 1️⃣0️⃣-5️⃣"

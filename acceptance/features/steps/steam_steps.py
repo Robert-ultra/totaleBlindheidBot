@@ -125,6 +125,16 @@ def step_steam_playing_no_details(context: Context, steam_id: str) -> None:
     helpers.steam_report(steam_id, {"player_name": "Gamer", "gameid": "730"})
 
 
+@when('Steam reports user "{steam_id}" in the CS2 menu')
+def step_steam_in_menu(context: Context, steam_id: str) -> None:
+    _capture_steam_baseline(context)
+    helpers.steam_report(steam_id, {
+        "player_name": "Gamer",
+        "gameid": "730",
+        "rich_presence": [{"key": "status", "value": "In the main menu"}],
+    })
+
+
 @when('Steam reports user "{steam_id}" stopped playing')
 def step_steam_stopped(context: Context, steam_id: str) -> None:
     _capture_steam_baseline(context)
@@ -275,3 +285,13 @@ def step_steam_nickname(context: Context, nickname: str) -> None:
 @then('the bot has never been nicknamed "{nickname}" on Steam')
 def step_steam_never_nicknamed(context: Context, nickname: str) -> None:
     assert nickname not in helpers.steam_nicknames(), f"The bot took the Steam nickname {nickname!r}"
+
+
+@then('the Steam message containing "{expected}" in chat {chat_id:d} is deleted')
+def step_steam_message_deleted(context: Context, expected: str, chat_id: int) -> None:
+    def deleted() -> bool:
+        outbox: List[Dict[str, Any]] = helpers.get_outbox(chat_id)
+        sent: List[int] = [m["message_id"] for m in outbox if m["method"] == "sendMessage" and expected in m["text"]]
+        return any(m["method"] == "deleteMessage" and m["message_id"] in sent for m in outbox)
+
+    assert helpers.wait_until(deleted), f"No Steam message containing {expected!r} was deleted in chat {chat_id}"

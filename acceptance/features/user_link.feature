@@ -146,14 +146,14 @@ Feature: linking Telegram and Discord users
     When user 9119 sends "/game_history"
     Then the bot replies "🏆 Inferno · Competitive · 5-3"
     When Steam mappings are refreshed
-    And Steam reports user "76561198000009009" playing CS2 with score "8-3" on map "Inferno"
+    And Steam reports user "76561198000009009" playing CS2 with score "8-2" on map "Inferno"
     And Steam reports user "76561198000009009" stopped playing
-    Then chat 9009 eventually receives a new Steam message "🏆 Gamer won a game on Inferno (Competitive): 8️⃣-3️⃣"
+    Then chat 9009 eventually receives a new Steam message "🏆 Gamer won a game on Inferno (Competitive): 8️⃣-2️⃣"
     When user 9119 sends "/game_history"
     Then the bot replies:
       """
       🏆 Inferno · Competitive · 5-3
-      🏆 Inferno · Competitive · 8-3
+      🏆 Inferno · Competitive · 8-2
       """
     When the user sends "/unlink_user @user9119"
     Then the bot replies "Unlinked User9119 from Discord user fay."
@@ -161,7 +161,7 @@ Feature: linking Telegram and Discord users
     Then the bot replies:
       """
       🏆 Inferno · Competitive · 5-3
-      🏆 Inferno · Competitive · 8-3
+      🏆 Inferno · Competitive · 8-2
       """
 
   Scenario: a Steam id both accounts registered is kept once
