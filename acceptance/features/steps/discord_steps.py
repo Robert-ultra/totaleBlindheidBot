@@ -1,6 +1,7 @@
 """Steps for the Discord side: defining servers, speaking as Discord users, asserting on what the bot
 posted there. The Telegram side of the same scenarios uses telegram_steps.py."""
 import re
+import time
 from typing import Any, Callable, Dict, List, Optional
 
 from behave import given, when, then, use_step_matcher
@@ -299,6 +300,18 @@ def step_channel_receives_bot_with_buttons(context: Context, channel_id: str, te
     is_hit = lambda m: _is_bot_message(m) and text in m["content"] and helpers.discord_button_labels(m) == expected
     new: List[Dict[str, Any]] = _bot_messages(_new_messages(context, channel_id, is_hit))
     assert any(is_hit(m) for m in new), f"Expected a bot message containing {text!r} with buttons {expected} in channel {channel_id}, got {_describe(new)}"
+
+
+@then('Discord channel "(?P<channel_id>\\d+)" receives a bot message timing the rollcall (?P<hours>\\d+) hours ahead in Discord timestamps')
+def step_channel_receives_timestamps(context: Context, channel_id: str, hours: str) -> None:
+    expected: float = time.time() + int(hours) * 3600
+
+    def timed(message: Dict[str, Any]) -> bool:
+        match = re.search(r"Rollcall scheduled for <t:(\d+):F> \(<t:(\d+):R>\)", message["content"])
+        return match is not None and all(abs(int(unix_time) - expected) < 120 for unix_time in match.groups())
+
+    new: List[Dict[str, Any]] = _new_messages(context, channel_id, timed)
+    assert any(timed(m) for m in new), f"Expected Discord timestamps {hours} hours ahead in channel {channel_id}, got {_describe(new)}"
 
 
 @then('Discord channel "(?P<channel_id>\\d+)" receives a bot message whose first line is one of')
