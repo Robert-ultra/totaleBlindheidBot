@@ -1,8 +1,6 @@
 """Behave lifecycle hooks: wait for the stack, seed per-scenario context."""
 import os
 import sys
-import time
-from typing import Optional
 
 import requests
 from behave.model import Scenario, Step
@@ -15,32 +13,29 @@ import helpers  # noqa: E402
 
 
 def _wait_for(url: str, timeout: int = 90, name: str = "") -> None:
-    deadline: float = time.time() + timeout
-    last_err: Optional[Exception] = None
-    while time.time() < deadline:
+    def healthy() -> bool:
         try:
-            resp = requests.get(url, timeout=3)
-            if resp.status_code < 500:
-                return
-        except Exception as exc:  # noqa: BLE001
-            last_err = exc
-        time.sleep(1)
-    raise RuntimeError(f"Timed out waiting for {name or url}: {last_err}")
+            return requests.get(url, timeout=3).status_code < 500
+        except requests.RequestException:
+            return False
+
+    if not helpers.wait_until(healthy, timeout, interval=1):
+        raise RuntimeError(f"Timed out waiting for {name or url}")
 
 
 def _wait_for_bot_polling(timeout: int = 90) -> None:
     """Smoke-check that the bot is up and polling by round-tripping a /hi."""
-    deadline: float = time.time() + timeout
     chat_id: int = 999000
     user = {"id": 999001, "first_name": "Warmup", "username": "warmup"}
-    while time.time() < deadline:
+
+    def replied() -> bool:
         helpers.reset_mock()
         helpers.inject_message("/hi", chat_id, user)
-        new = helpers.wait_for_new_message(chat_id, 0, timeout=5)
-        if new:
-            helpers.reset_mock()
-            return
-    raise RuntimeError("Bot never replied to warmup /hi; is it polling the mock?")
+        return bool(helpers.wait_for_new_message(chat_id, 0, timeout=5))
+
+    if not helpers.wait_until(replied, timeout, interval=0):
+        raise RuntimeError("Bot never replied to warmup /hi; is it polling the mock?")
+    helpers.reset_mock()
 
 
 def before_all(context: Context) -> None:

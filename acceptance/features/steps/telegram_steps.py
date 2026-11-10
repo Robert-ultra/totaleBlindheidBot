@@ -62,15 +62,12 @@ def _json(value: Any) -> Any:
 @then('the bot relays "(?P<expected>[^"]*)" as a reply to (?P<which>the remembered message|that message)')
 def step_bot_relays_reply(context: Context, expected: str, which: str) -> None:
     target: int = context.remembered_message_id if which == "the remembered message" else context.last_sent_message_id
-    deadline: float = time.time() + helpers.REPLY_TIMEOUT
-    sent: List[Any] = []
-    while time.time() < deadline:
-        sent = [(m["text"], _json(m["params"].get("reply_parameters"))) for m in helpers.get_outbox(context.chat_id)[context.cmd_baseline:]
+    def sent() -> List[Any]:
+        return [(m["text"], _json(m["params"].get("reply_parameters"))) for m in helpers.get_outbox(context.chat_id)[context.cmd_baseline:]
                 if m["method"] == "sendMessage"]
-        if any(text == expected and (reply or {}).get("message_id") == target for text, reply in sent):
-            return
-        time.sleep(helpers.POLL_INTERVAL)
-    raise AssertionError(f"Expected {expected!r} as a reply to message {target}; sent: {sent}")
+
+    assert helpers.wait_until(lambda: any(text == expected and (reply or {}).get("message_id") == target for text, reply in sent())), \
+        f"Expected {expected!r} as a reply to message {target}; sent: {sent()}"
 
 
 @when('the user edits that message to "(?P<text>[^"]*)"')
@@ -81,34 +78,28 @@ def step_user_edits(context: Context, text: str) -> None:
 
 @then('the bot deletes its (?P<count>\\d+) cop(?:y|ies)')
 def step_bot_deletes_copies(context: Context, count: str) -> None:
-    deadline: float = time.time() + helpers.REPLY_TIMEOUT
-    deleted: List[Any] = []
-    while time.time() < deadline:
-        deleted = [m["message_id"] for m in helpers.get_outbox(context.chat_id)[context.cmd_baseline:] if m["method"] == "deleteMessage"]
-        if len(deleted) == int(count):
-            return
-        time.sleep(helpers.POLL_INTERVAL)
-    raise AssertionError(f"Expected {count} deleted copies in chat {context.chat_id}, got {deleted}")
+    def deleted() -> List[Any]:
+        return [m["message_id"] for m in helpers.get_outbox(context.chat_id)[context.cmd_baseline:] if m["method"] == "deleteMessage"]
+
+    assert helpers.wait_until(lambda: len(deleted()) == int(count)), \
+        f"Expected {count} deleted copies in chat {context.chat_id}, got {deleted()}"
 
 
 @then('the bot deletes nothing')
 def step_bot_deletes_nothing(context: Context) -> None:
-    time.sleep(3)
-    deleted: List[Any] = [m for m in helpers.get_outbox(context.chat_id)[context.cmd_baseline:] if m["method"] == "deleteMessage"]
+    deleted: List[Any] = helpers.wait_until(
+        lambda: [m for m in helpers.get_outbox(context.chat_id)[context.cmd_baseline:] if m["method"] == "deleteMessage"],
+        helpers.QUIET_WINDOW,
+    )
     assert not deleted, f"Expected no deletions in chat {context.chat_id}, got {deleted}"
 
 
 @then('the bot edits its copy to "(?P<expected>[^"]*)"')
 def step_bot_edits_copy(context: Context, expected: str) -> None:
-    deadline: float = time.time() + helpers.REPLY_TIMEOUT
-    edits: List[str] = []
-    while time.time() < deadline:
-        outbox = helpers.get_outbox(context.chat_id)[context.cmd_baseline:]
-        edits = [m["text"] for m in outbox if m["method"] in ("editMessageText", "editMessageCaption")]
-        if expected in edits:
-            return
-        time.sleep(helpers.POLL_INTERVAL)
-    raise AssertionError(f"Expected the bot to edit its copy to {expected!r}; edits: {edits}")
+    def edits() -> List[str]:
+        return [m["text"] for m in helpers.get_outbox(context.chat_id)[context.cmd_baseline:] if m["method"] in ("editMessageText", "editMessageCaption")]
+
+    assert helpers.wait_until(lambda: expected in edits()), f"Expected the bot to edit its copy to {expected!r}; edits: {edits()}"
 
 
 @when('the user sends "(?P<text>[^"]*)"')
@@ -143,17 +134,14 @@ def step_remember_latest_message(context: Context) -> None:
 
 
 def _wait_for_remembered_edit(context: Context, matches: Any, description: str) -> None:
-    deadline: float = time.time() + helpers.REPLY_TIMEOUT
-    edits: List[str] = []
-    while time.time() < deadline:
-        edits = [
+    def edits() -> List[str]:
+        return [
             m["text"] for m in helpers.get_outbox(context.chat_id)
             if m["method"] == "editMessageText" and m["message_id"] == context.remembered_message_id
         ]
-        if any(matches(text) for text in edits):
-            return
-        time.sleep(helpers.POLL_INTERVAL)
-    raise AssertionError(f"The remembered message was never edited {description}; edits: {edits}")
+
+    assert helpers.wait_until(lambda: any(matches(text) for text in edits())), \
+        f"The remembered message was never edited {description}; edits: {edits()}"
 
 
 @then('the remembered message is edited to contain "(?P<expected>[^"]*)"')
@@ -487,12 +475,9 @@ def _bot_reactions(context: Context, message_id: int) -> List[str]:
 @then('the bot reacts to (?P<which>that message|the remembered message) with "(?P<emoji>[^"]*)"')
 def step_bot_reacts(context: Context, which: str, emoji: str) -> None:
     message_id: int = _reacted_message(context, which)
-    deadline: float = time.time() + helpers.REPLY_TIMEOUT
-    while time.time() < deadline:
-        if _bot_reactions(context, message_id)[-1:] == [emoji]:
-            return
-        time.sleep(helpers.POLL_INTERVAL)
-    raise AssertionError(f"Expected the bot to react to message {message_id} with {emoji!r}; it set {_bot_reactions(context, message_id)}")
+    assert helpers.wait_until(lambda: _bot_reactions(context, message_id)[-1:] == [emoji]), (
+        f"Expected the bot to react to message {message_id} with {emoji!r}; it set {_bot_reactions(context, message_id)}"
+    )
 
 
 @then('the bot takes back its reaction to (?P<which>that message|the remembered message)')
@@ -502,6 +487,8 @@ def step_bot_unreacts(context: Context, which: str) -> None:
 
 @then('the bot does not react on Telegram')
 def step_bot_no_telegram_reaction(context: Context) -> None:
-    time.sleep(3)
-    reactions: List[Dict[str, Any]] = [m for m in helpers.get_outbox(context.chat_id)[context.cmd_baseline:] if m["method"] == "setMessageReaction"]
+    reactions: List[Dict[str, Any]] = helpers.wait_until(
+        lambda: [m for m in helpers.get_outbox(context.chat_id)[context.cmd_baseline:] if m["method"] == "setMessageReaction"],
+        helpers.QUIET_WINDOW,
+    )
     assert not reactions, f"Expected no reactions in chat {context.chat_id}, got {reactions}"
