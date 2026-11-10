@@ -465,8 +465,16 @@ def steam_nicknames() -> List[str]:
     return resp.json()["nicknames"]
 
 
-def steam_declare_strangers(steam_ids: List[str]) -> None:
-    requests.post(f"{STEAM_CONTROL_URL}/steam/strangers", json={"steamIds": steam_ids}, timeout=5).raise_for_status()
+def steam_set_relationship(steam_id: str, relationship: str, refuses: bool = False) -> None:
+    """How the account stands with the bot's, as an EFriendRelationship name."""
+    body: Dict[str, Any] = {"steamId": steam_id, "relationship": relationship, "refuses": refuses}
+    requests.post(f"{STEAM_CONTROL_URL}/steam/relationship", json=body, timeout=5).raise_for_status()
+
+
+def steam_friend_requests() -> List[str]:
+    resp = requests.get(f"{STEAM_CONTROL_URL}/steam/friend-requests", timeout=5)
+    resp.raise_for_status()
+    return resp.json()["requests"]
 
 
 def steam_emit_user(steam_id: str, user: Dict[str, Any]) -> None:

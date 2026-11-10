@@ -24,8 +24,13 @@ const personaRequests = [];
 
 const nicknames = [];
 
-// Everyone is a friend of the bot's account, except the ids behave declares strangers.
-const strangers = new Set();
+// How each account stands with the bot's (an EFriendRelationship name); anyone not listed is a friend.
+const relationships = new Map();
+
+// Accounts Steam turns the bot's friend requests down for.
+const refusing = new Set();
+
+const friendRequests = [];
 
 class FakeSteamUser extends EventEmitter {
     constructor(options) {
@@ -33,7 +38,7 @@ class FakeSteamUser extends EventEmitter {
         this.options = options || {};
         this.steamID = null;
         this.myFriends = new Proxy({}, {
-            get: (_friends, steamId) => strangers.has(steamId) ? undefined : FakeSteamUser.EFriendRelationship.Friend
+            get: (_friends, steamId) => FakeSteamUser.EFriendRelationship[relationships.get(steamId) ?? 'Friend']
         });
         this.users = {};
         // SteamService attaches 'save'/'read' listeners to storage when S3 is
@@ -61,6 +66,17 @@ class FakeSteamUser extends EventEmitter {
     // the bot tracks by now.
     getPersonas(steamIds) {
         personaRequests.push(steamIds.map(String));
+    }
+
+    // Like Steam's: asks a stranger, accepts someone who asked.
+    addFriend(steamId) {
+        const id = String(steamId);
+        friendRequests.push(id);
+        if (refusing.has(id)) {
+            return Promise.reject(new Error('LimitExceeded'));
+        }
+        relationships.set(id, relationships.get(id) === 'RequestRecipient' ? 'Friend' : 'RequestInitiator');
+        return Promise.resolve({ personaName: id });
     }
 
     logOff() { /* no-op */ }
@@ -120,8 +136,18 @@ const controlServer = http.createServer(async (req, res) => {
         sendJson(res, 200, { ok: true, requests: personaRequests });
     } else if (req.method === 'GET' && url === '/steam/nicknames') {
         sendJson(res, 200, { ok: true, nicknames });
-    } else if (req.method === 'POST' && url === '/steam/strangers') {
-        (await readBody(req)).steamIds.forEach(steamId => strangers.add(String(steamId)));
+    } else if (req.method === 'GET' && url === '/steam/friend-requests') {
+        sendJson(res, 200, { ok: true, requests: friendRequests });
+    } else if (req.method === 'POST' && url === '/steam/relationship') {
+        const body = await readBody(req);
+        const steamId = String(body.steamId);
+        relationships.set(steamId, body.relationship);
+        if (body.refuses) {
+            refusing.add(steamId);
+        }
+        if (activeClient) {
+            activeClient.emit('friendRelationship', { getSteamID64: () => steamId }, FakeSteamUser.EFriendRelationship[body.relationship]);
+        }
         sendJson(res, 200, { ok: true });
     } else if (!activeClient) {
         // All remaining endpoints act on the live client.

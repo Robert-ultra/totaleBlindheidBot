@@ -51,6 +51,16 @@ class RollcallPlayerDAO {
         return this._getRollcallPlayerRows(chat_id).then(rows => rows.map(row => this._playerMention(row)));
     }
 
+    // The Steam accounts of everyone in any chat's rotation, whether listed as a user or by @username.
+    async getRotationSteamIds(): Promise<string[]> {
+        const rows = await query<RowDataPacket[]>(
+            'SELECT DISTINCT s.steam_id FROM rollcall_player p ' +
+            'JOIN user u ON u.id = p.user_id OR (p.user_id IS NULL AND u.username = p.username) ' +
+            'JOIN user_steam_id s ON s.user_id = u.id'
+        );
+        return rows.map(row => String(row.steam_id));
+    }
+
     getRollcallPlayers(chat_id: number): Promise<RollcallPlayer[]> {
         return this._getRollcallPlayerRows(chat_id).then(rows => rows.map(row => ({ id: Number(row.id), mention: this._playerMention(row) })));
     }

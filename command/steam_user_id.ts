@@ -7,7 +7,7 @@ import { broadcast } from '../messenger.js';
 import { toDiscordMarkdown } from '../discord/markdown.js';
 import UserReferenceResolver from '../UserReferenceResolver.js';
 import UserPicker from '../UserPicker.js';
-import SteamService from '../SteamService.js';
+import SteamService, { FriendRequests } from '../SteamService.js';
 
 const dao = new UserDAO();
 const resolver = new UserReferenceResolver(dao);
@@ -31,15 +31,20 @@ const parseIds = (arg: string): string[] | null => {
     return ids.length > 0 && ids.every(id => /^\d{17}$/.test(id)) ? ids : null;
 };
 
-const friendNote = (ids: string[]): string => {
+// Befriends the accounts on Steam and says what came of it; nothing when they are friends already.
+const friendNote = async (ids: string[]): Promise<string> => {
     const steam: SteamService | null = SteamService.instance;
-    const strangers: string[] = steam?.notFriends(ids) ?? [];
-    const profile: string | undefined = steam?.profileUrl();
-    if (strangers.length === 0 || profile === undefined) {
+    if (!steam) {
         return '';
     }
-    return `\n\nNote: ${strangers.join(', ')} ${strangers.length === 1 ? 'is' : 'are'} not on my Steam friends list yet. `
-        + `I only get game updates from friends, so add me on Steam: ${profile}`;
+    const { requested, accepted, pending, failed }: FriendRequests = await steam.befriend(ids);
+    const asked: string[] = [...requested, ...pending];
+    const notes: string[] = [
+        asked.length > 0 ? `I've sent a Steam friend request to ${asked.join(', ')}. I can see their games once it is accepted.` : '',
+        accepted.length > 0 ? `I've accepted the Steam friend request from ${accepted.join(', ')}.` : '',
+        failed.length > 0 ? `I couldn't send a Steam friend request to ${failed.join(', ')}. Add me on Steam instead: ${steam.profileUrl()}` : ''
+    ].filter(note => note !== '');
+    return notes.length > 0 ? `\n\n${notes.join('\n')}` : '';
 };
 
 const setForUser = (user_id: number, name: string, idsArg: string, reply: (text: Part) => Promise<unknown>): Promise<boolean> => {
@@ -48,7 +53,8 @@ const setForUser = (user_id: number, name: string, idsArg: string, reply: (text:
         return reply('Invalid Steam ID(s). Each must be a 17-digit number (SteamID64) starting with 7656.').then(() => false);
     }
     return dao.setSteamUserId(user_id, ids)
-        .then(() => reply(`Steam user ID(s) for ${name} has been set to ${ids.join(', ')}${friendNote(ids)}`))
+        .then(() => friendNote(ids))
+        .then(note => reply(`Steam user ID(s) for ${name} has been set to ${ids.join(', ')}${note}`))
         .then(() => true);
 };
 
@@ -62,7 +68,8 @@ export default (bot: Bot, cmd: Command): void | Promise<unknown> => {
         return cmd.reply(SPECIFY_IDS);
     }
     return dao.setSteamUserId(cmd.user.id, ids)
-        .then(() => cmd.reply(`Your Steam user ID(s) has been set to ${ids.join(', ')}${friendNote(ids)}`))
+        .then(() => friendNote(ids))
+        .then(note => cmd.reply(`Your Steam user ID(s) has been set to ${ids.join(', ')}${note}`))
         .catch((err: Error) => cmd.reply(formatError(err)));
 };
 
@@ -102,7 +109,8 @@ const handleTelegram = (bot: Bot, msg: ExtendedMessage): void => {
     const user_id: number = msg.user.id;
     console.log(`User ${user_id} set Steam ID(s) to ${ids.join(', ')}`);
     dao.setSteamUserId(user_id, ids)
-        .then(() => msg.reply(`Your Steam user ID(s) has been set to ${ids.join(', ')}${friendNote(ids)}`))
+        .then(() => friendNote(ids))
+        .then(note => msg.reply(`Your Steam user ID(s) has been set to ${ids.join(', ')}${note}`))
         .catch((err: Error) => msg.reply(formatError(err)));
 };
 

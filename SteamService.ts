@@ -102,6 +102,14 @@ export const PRESENCE_EMOJI: Record<Presence, string> = {
     unlinked: '😶‍🌫️'
 };
 
+// What became of befriending a set of Steam accounts; those already friends are in none of these.
+export interface FriendRequests {
+    requested: string[];
+    accepted: string[];
+    pending: string[];
+    failed: string[];
+}
+
 class SteamService {
     private bot: Bot;
     private client: SteamUser; // Initialize in constructor
@@ -207,6 +215,14 @@ class SteamService {
             console.log(`Friends list loaded. Bot has ${Object.keys(this.client.myFriends).length} friends.`);
             this.friendsListLoaded = true;
             this.updateUserMappings();
+            this.befriendRotationPlayers().catch(err => console.error('Error befriending rollcall players on Steam:', err));
+        });
+
+        this.client.on('friendRelationship', (sid: any, relationship: SteamUser.EFriendRelationship) => {
+            const steamId: string = sid.getSteamID64();
+            if (relationship === SteamUser.EFriendRelationship.RequestRecipient && this.steamToTelegram[steamId]) {
+                this.befriend([steamId]).catch(err => console.error(`Error accepting the Steam friend request of ${steamId}:`, err));
+            }
         });
 
         this.client.on('steamGuard', (domain: string | null, callback: (code: string) => void, lastCodeWrong: boolean) => {
@@ -566,12 +582,36 @@ class SteamService {
         }
     }
 
-    // Steam only reports what friends of the bot's account are playing. Empty while unknown.
-    notFriends(steamIds: string[]): string[] {
-        if (!this.friendsListLoaded) {
-            return [];
+    // Steam only reports what friends of the bot's account are playing, so each account that is
+    // not one yet is sent a friend request, or has its own accepted. A request already out is left
+    // alone, as is anyone blocking or ignoring the bot. Does nothing while the friends list is unknown.
+    async befriend(steamIds: string[]): Promise<FriendRequests> {
+        const outcome: FriendRequests = { requested: [], accepted: [], pending: [], failed: [] };
+        if (!this.friendsListLoaded || !this.client.steamID) {
+            return outcome;
         }
-        return steamIds.filter(steamId => this.client.myFriends[steamId] !== SteamUser.EFriendRelationship.Friend);
+        const { None, RequestRecipient, RequestInitiator } = SteamUser.EFriendRelationship;
+        for (const steamId of steamIds) {
+            const relationship: SteamUser.EFriendRelationship = this.client.myFriends[steamId] ?? None;
+            if (relationship === RequestInitiator) {
+                outcome.pending.push(steamId);
+            } else if (relationship === None || relationship === RequestRecipient) {
+                await this.client.addFriend(steamId)
+                    .then(() => (relationship === None ? outcome.requested : outcome.accepted).push(steamId))
+                    .catch((err: Error) => {
+                        console.warn(`Steam refused the friend request to ${steamId}:`, err);
+                        outcome.failed.push(steamId);
+                    });
+            }
+        }
+        return outcome;
+    }
+
+    private async befriendRotationPlayers(): Promise<void> {
+        const { requested, accepted, failed } = await this.befriend(await this.rollcallPlayerDao.getRotationSteamIds());
+        if (requested.length + accepted.length + failed.length > 0) {
+            console.log(`Steam friend requests to rollcall players: sent ${requested.length}, accepted ${accepted.length}, failed ${failed.length}.`);
+        }
     }
 
     // False when not logged on, as there is nobody to rename then.
