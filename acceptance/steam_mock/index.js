@@ -22,6 +22,8 @@ const steamGuardState = { requested: false, called: false, code: null };
 
 const personaRequests = [];
 
+const nicknames = [];
+
 // Everyone is a friend of the bot's account, except the ids behave declares strangers.
 const strangers = new Set();
 
@@ -49,7 +51,11 @@ class FakeSteamUser extends EventEmitter {
         });
     }
 
-    setPersona() { /* no-op */ }
+    setPersona(_state, name) {
+        if (name !== undefined) {
+            nicknames.push(name);
+        }
+    }
 
     // Presence is driven via the control server; the requests only tell behave which accounts
     // the bot tracks by now.
@@ -112,6 +118,8 @@ const controlServer = http.createServer(async (req, res) => {
         sendJson(res, 200, { ok: true, ...steamGuardState });
     } else if (req.method === 'GET' && url === '/steam/personas') {
         sendJson(res, 200, { ok: true, requests: personaRequests });
+    } else if (req.method === 'GET' && url === '/steam/nicknames') {
+        sendJson(res, 200, { ok: true, nicknames });
     } else if (req.method === 'POST' && url === '/steam/strangers') {
         (await readBody(req)).steamIds.forEach(steamId => strangers.add(String(steamId)));
         sendJson(res, 200, { ok: true });
