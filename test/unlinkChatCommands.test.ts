@@ -32,7 +32,7 @@ const unlink = async (argument: string, before: ChatLink[]): Promise<{ unregiste
         chat: { id: -5 },
         from: { id: 1 },
         command: { name: 'unlink_chat', argument, argumentTokens: argument ? [argument] : [] },
-        reply: async (text: unknown) => replies.push(text)
+        replyPrivately: async (text: unknown) => replies.push(text)
     } as unknown as ExtendedMessage;
     await unlinkChat(admin, msg);
     return { unregistered, replies };

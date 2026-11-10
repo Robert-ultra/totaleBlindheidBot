@@ -14,17 +14,17 @@ export default (bot: Bot, msg: ExtendedMessage): void => {
 
     const code: string | undefined = msg.command?.argument;
     if (!code) {
-        msg.reply('Please specify the Steam Guard code.');
+        msg.replyPrivately('Please specify the Steam Guard code.');
         return;
     }
 
     const steamService = SteamService.instance;
     if (!steamService) {
-        msg.reply('Steam service is not enabled.');
+        msg.replyPrivately('Steam service is not enabled.');
         return;
     } else if (steamService.submitSteamGuardCode(code)) {
-        msg.reply('Steam Guard code submitted.');
+        msg.replyPrivately('Steam Guard code submitted.');
     } else {
-        msg.reply('No Steam Guard code is currently requested, or it was already provided.');
+        msg.replyPrivately('No Steam Guard code is currently requested, or it was already provided.');
     }
 };

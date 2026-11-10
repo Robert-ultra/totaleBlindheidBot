@@ -20,22 +20,22 @@ export default async (bot: Bot, msg: ExtendedMessage): Promise<void> => {
     try {
         const discord: DiscordService | null = DiscordService.instance;
         if (!discord) {
-            await msg.reply(NOT_CONFIGURED);
+            await msg.replyPrivately(NOT_CONFIGURED);
             return;
         } else if (!(await isChatAdmin(bot, msg.chat.id, msg.from?.id))) {
-            await msg.reply(ADMIN_ONLY);
+            await msg.replyPrivately(ADMIN_ONLY);
             return;
         }
 
         const channel_id: string | undefined = msg.command.argumentTokens[0];
         if (!channel_id || !isSnowflake(channel_id) || msg.command.argumentTokens.length !== 1) {
-            await msg.reply(USAGE);
+            await msg.replyPrivately(USAGE);
             return;
         }
 
         const existing: ChatLink | undefined = await chatLinkDao.getLinkByChannel(channel_id);
         if (existing) {
-            await msg.reply(existing.telegram_chat_id === msg.chat.id
+            await msg.replyPrivately(existing.telegram_chat_id === msg.chat.id
                 ? 'That channel is already linked to this group.'
                 : 'That channel is already linked to another Telegram group.');
             return;
@@ -44,13 +44,13 @@ export default async (bot: Bot, msg: ExtendedMessage): Promise<void> => {
         const inspection: ChannelInspection = await discord.inspectChannel(channel_id);
         switch (inspection.kind) {
             case 'not_found':
-                await msg.reply(notFound(channel_id));
+                await msg.replyPrivately(notFound(channel_id));
                 return;
             case 'wrong_type':
-                await msg.reply('That Discord channel is not a text channel.');
+                await msg.replyPrivately('That Discord channel is not a text channel.');
                 return;
             case 'missing_permissions':
-                await msg.reply(`I can see #${inspection.channel_name} on ${inspection.guild_name}, but I'm missing permissions there: ${inspection.missing.join(', ')}.`);
+                await msg.replyPrivately(`I can see #${inspection.channel_name} on ${inspection.guild_name}, but I'm missing permissions there: ${inspection.missing.join(', ')}.`);
                 return;
         }
 
@@ -68,10 +68,10 @@ export default async (bot: Bot, msg: ExtendedMessage): Promise<void> => {
 
         const group: string = msg.chat.title ? `the Telegram group “${msg.chat.title}”` : 'a Telegram group';
         await discord.sendAsBot(channel_id, `This channel is now linked to ${group}. Messages here and there are relayed both ways.`);
-        await msg.reply(`Linked to #${inspection.channel_name} on ${inspection.guild_name}.` + (webhook
+        await msg.replyPrivately(`Linked to #${inspection.channel_name} on ${inspection.guild_name}.` + (webhook
             ? ''
             : " I can't manage webhooks there, so relayed messages will be posted by me with the sender's name in front."));
     } catch (err: any) {
-        await msg.reply(formatError(err));
+        await msg.replyPrivately(formatError(err));
     }
 };

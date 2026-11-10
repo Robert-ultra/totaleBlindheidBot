@@ -168,25 +168,25 @@ def step_webhook_posts(context: Context, channel_id: str, text: str) -> None:
 @then('Discord channel "(?P<channel_id>\\d+)" receives "(?P<text>[^"]*)" from "(?P<name>[^"]*)"')
 def step_channel_receives_from(context: Context, channel_id: str, text: str, name: str) -> None:
     """A relayed message: posted through the channel's webhook under the author's name."""
-    new: List[Dict[str, Any]] = _new_messages(context, channel_id)
-    hits = [m for m in new if m["method"] == "executeWebhook" and m["username"] == name and m["content"] == text]
-    assert hits, f"Expected {text!r} from {name!r} in channel {channel_id}, got {[(m['method'], m['username'], m['content']) for m in new]}"
+    is_hit = lambda m: m["method"] == "executeWebhook" and m["username"] == name and m["content"] == text
+    new: List[Dict[str, Any]] = _new_messages(context, channel_id, is_hit)
+    assert any(is_hit(m) for m in new), f"Expected {text!r} from {name!r} in channel {channel_id}, got {[(m['method'], m['username'], m['content']) for m in new]}"
 
 
 @then('Discord channel "(?P<channel_id>\\d+)" receives "(?P<text>[^"]*)" posted by the bot as "(?P<name>[^"]*)"')
 def step_channel_receives_as_bot(context: Context, channel_id: str, text: str, name: str) -> None:
     """A relayed message where no webhook is available: the bot posts it with the name in front."""
-    new: List[Dict[str, Any]] = _new_messages(context, channel_id)
     expected: str = f"**{name}:** {text}"
-    hits = [m for m in new if m["method"] == "createMessage" and m["content"] == expected]
-    assert hits, f"Expected a bot message {expected!r} in channel {channel_id}, got {[(m['method'], m['content']) for m in new]}"
+    is_hit = lambda m: m["method"] == "createMessage" and m["content"] == expected
+    new: List[Dict[str, Any]] = _new_messages(context, channel_id, is_hit)
+    assert any(is_hit(m) for m in new), f"Expected a bot message {expected!r} in channel {channel_id}, got {[(m['method'], m['content']) for m in new]}"
 
 
 @then('Discord channel "(?P<channel_id>\\d+)" receives a bot message containing "(?P<text>[^"]+)"')
 def step_channel_receives_bot_containing(context: Context, channel_id: str, text: str) -> None:
-    new: List[Dict[str, Any]] = _new_messages(context, channel_id)
-    hits = [m for m in new if _is_bot_message(m) and text in m["content"]]
-    assert hits, f"Expected a bot message containing {text!r} in channel {channel_id}, got {[(m['method'], m['content']) for m in new]}"
+    is_hit = lambda m: _is_bot_message(m) and text in m["content"]
+    new: List[Dict[str, Any]] = _new_messages(context, channel_id, is_hit)
+    assert any(is_hit(m) for m in new), f"Expected a bot message containing {text!r} in channel {channel_id}, got {[(m['method'], m['content']) for m in new]}"
 
 
 @then('Discord channel "(?P<channel_id>\\d+)" sees a bot message edited to contain "(?P<text>[^"]+)"')
@@ -203,18 +203,27 @@ def step_channel_receives_no_bot_containing(context: Context, channel_id: str, t
     assert not hits, f"Expected no bot message containing {text!r} in channel {channel_id}, got {_describe(hits)}"
 
 
+@then('Discord channel "(?P<channel_id>\\d+)" stays free of bot messages')
+def step_channel_no_bot_messages(context: Context, channel_id: str) -> None:
+    posted: List[Dict[str, Any]] = helpers.wait_until(
+        lambda: _bot_messages(helpers.discord_outbox(channel_id)[_baseline(context, channel_id):]),
+        helpers.QUIET_WINDOW,
+    )
+    assert not posted, f"Expected no bot message in channel {channel_id}, got {_describe(posted)}"
+
+
 @then('Discord channel "(?P<channel_id>\\d+)" receives a bot message')
 def step_channel_receives_bot_message(context: Context, channel_id: str) -> None:
-    new: List[Dict[str, Any]] = _new_messages(context, channel_id, _is_bot_message)
-    hits = [m for m in new if _is_bot_message(m) and m["content"] == context.text]
-    assert hits, f"Expected the bot message {context.text!r} in channel {channel_id}, got {[(m['method'], m['content']) for m in new]}"
+    is_hit = lambda m: _is_bot_message(m) and m["content"] == context.text
+    new: List[Dict[str, Any]] = _new_messages(context, channel_id, is_hit)
+    assert any(is_hit(m) for m in new), f"Expected the bot message {context.text!r} in channel {channel_id}, got {[(m['method'], m['content']) for m in new]}"
 
 
 @then('Discord channel "(?P<channel_id>\\d+)" gets the private answer "(?P<text>[^"]+)"')
 def step_channel_private_answer(context: Context, channel_id: str, text: str) -> None:
-    new: List[Dict[str, Any]] = _new_messages(context, channel_id, _is_bot_message)
-    hits = [m for m in new if m["content"] == text and m["params"].get("flags") == 64]
-    assert hits, f"Expected the ephemeral answer {text!r} in channel {channel_id}, got {[(m['method'], m['content'], m['params'].get('flags')) for m in new]}"
+    is_hit = lambda m: m["content"] == text and m["params"].get("flags") == 64
+    new: List[Dict[str, Any]] = _new_messages(context, channel_id, is_hit)
+    assert any(is_hit(m) for m in new), f"Expected the ephemeral answer {text!r} in channel {channel_id}, got {[(m['method'], m['content'], m['params'].get('flags')) for m in new]}"
 
 
 @then('Discord channel "(?P<channel_id>\\d+)" receives nothing')
@@ -279,23 +288,25 @@ def step_slash_commands(context: Context, guild_id: str, names: str) -> None:
 
 @then('Discord channel "(?P<channel_id>\\d+)" receives a bot message starting with "(?P<text>[^"]+)"')
 def step_channel_receives_bot_starting(context: Context, channel_id: str, text: str) -> None:
-    new: List[Dict[str, Any]] = _bot_messages(_new_messages(context, channel_id, _is_bot_message))
-    assert any(m["content"].startswith(text) for m in new), f"Expected a bot message starting with {text!r} in channel {channel_id}, got {_describe(new)}"
+    is_hit = lambda m: _is_bot_message(m) and m["content"].startswith(text)
+    new: List[Dict[str, Any]] = _bot_messages(_new_messages(context, channel_id, is_hit))
+    assert any(is_hit(m) for m in new), f"Expected a bot message starting with {text!r} in channel {channel_id}, got {_describe(new)}"
 
 
 @then('Discord channel "(?P<channel_id>\\d+)" receives a bot message containing "(?P<text>[^"]+)" with buttons "(?P<labels>[^"]*)"')
 def step_channel_receives_bot_with_buttons(context: Context, channel_id: str, text: str, labels: str) -> None:
     expected: List[str] = [l.strip() for l in labels.split(",")]
-    new: List[Dict[str, Any]] = _bot_messages(_new_messages(context, channel_id, _is_bot_message))
-    hits = [m for m in new if text in m["content"] and helpers.discord_button_labels(m) == expected]
-    assert hits, f"Expected a bot message containing {text!r} with buttons {expected} in channel {channel_id}, got {_describe(new)}"
+    is_hit = lambda m: _is_bot_message(m) and text in m["content"] and helpers.discord_button_labels(m) == expected
+    new: List[Dict[str, Any]] = _bot_messages(_new_messages(context, channel_id, is_hit))
+    assert any(is_hit(m) for m in new), f"Expected a bot message containing {text!r} with buttons {expected} in channel {channel_id}, got {_describe(new)}"
 
 
 @then('Discord channel "(?P<channel_id>\\d+)" receives a bot message whose first line is one of')
 def step_channel_receives_bot_first_line(context: Context, channel_id: str) -> None:
     options: List[str] = [row["quote"] for row in context.table]
-    new: List[Dict[str, Any]] = _bot_messages(_new_messages(context, channel_id, _is_bot_message))
-    assert any(m["content"].split("\n")[0] in options for m in new), f"Expected a bot message starting with one of {options} in channel {channel_id}, got {_describe(new)}"
+    is_hit = lambda m: _is_bot_message(m) and m["content"].split("\n")[0] in options
+    new: List[Dict[str, Any]] = _bot_messages(_new_messages(context, channel_id, is_hit))
+    assert any(is_hit(m) for m in new), f"Expected a bot message starting with one of {options} in channel {channel_id}, got {_describe(new)}"
 
 
 @when('the latest bot message in Discord channel "(?P<channel_id>\\d+)" is remembered')
@@ -386,10 +397,10 @@ def step_discord_sends_sticker(context: Context, username: str, name: str, user_
 
 @then('Discord channel "(?P<channel_id>\\d+)" receives a file "(?P<filename>[^"]*)" from "(?P<name>[^"]*)" with text "(?P<text>[^"]*)"')
 def step_channel_receives_file(context: Context, channel_id: str, filename: str, name: str, text: str) -> None:
-    new: List[Dict[str, Any]] = _new_messages(context, channel_id)
-    hits = [m for m in new if m["method"] == "executeWebhook" and m["username"] == name and m["content"] == text
-            and any(a["filename"] == filename for a in m["attachments"])]
-    assert hits, f"Expected file {filename!r} with text {text!r} from {name!r} in channel {channel_id}, got {[(m['method'], m['username'], m['content'], m['attachments']) for m in new]}"
+    is_hit = lambda m: (m["method"] == "executeWebhook" and m["username"] == name and m["content"] == text
+                        and any(a["filename"] == filename for a in m["attachments"]))
+    new: List[Dict[str, Any]] = _new_messages(context, channel_id, is_hit)
+    assert any(is_hit(m) for m in new), f"Expected file {filename!r} with text {text!r} from {name!r} in channel {channel_id}, got {[(m['method'], m['username'], m['content'], m['attachments']) for m in new]}"
 
 
 def _discord_react(context: Context, user: Dict[str, Any], text: str, channel_id: str, emoji: str, **extra: Any) -> None:

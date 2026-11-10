@@ -5,6 +5,7 @@ import GameHistoryDAO, { GameHistoryEntry } from '../../dao/GameHistoryDAO.js';
 import { formatError } from '../../utils.js';
 import { bold, fmt, messageText } from '../../format.js';
 import { resolvePlayerTarget } from '../playerArg.js';
+import { tellDiscord } from '../../messenger.js';
 import { resultEmoji } from '../game_history.js';
 
 const dao = new GameHistoryDAO();
@@ -198,7 +199,9 @@ export const handleDeleteMatchCallback = (bot: Bot, query: CallbackQuery): void 
                     return replacePicker('That match record no longer exists.').then(() => answer());
                 }
                 const who = entry.player_name ? ` (${entry.player_name})` : '';
-                return replacePicker(`🗑️ Deleted match record: ${describeEntry(entry)}${who}`)
+                const confirmation = `🗑️ Deleted match record: ${describeEntry(entry)}${who}`;
+                return replacePicker(confirmation)
+                    .then(() => tellDiscord(message.chat.id, confirmation))
                     .then(() => answer('Match record deleted.'));
             });
         })

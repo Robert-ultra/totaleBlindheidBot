@@ -15,7 +15,8 @@ const run = async (argument: string): Promise<{ replies: unknown[]; saved: unkno
         chat_id: 1,
         user: { id: 7 },
         command: { name: 'steam_user_id', argument, argumentTokens: argument.split(' ') },
-        reply: async text => replies.push(text)
+        reply: async text => replies.push(text),
+        replyPrivately: async () => undefined
     };
     await steamUserId({} as Bot, cmd);
     const saved = set.mock.calls.map(call => call.arguments);

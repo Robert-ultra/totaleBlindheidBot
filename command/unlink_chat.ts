@@ -30,37 +30,37 @@ export default async (bot: Bot, msg: ExtendedMessage): Promise<void> => {
     try {
         const discord: DiscordService | null = DiscordService.instance;
         if (!discord) {
-            await msg.reply(NOT_CONFIGURED);
+            await msg.replyPrivately(NOT_CONFIGURED);
             return;
         } else if (!(await isChatAdmin(bot, msg.chat.id, msg.from?.id))) {
-            await msg.reply(ADMIN_ONLY);
+            await msg.replyPrivately(ADMIN_ONLY);
             return;
         }
 
         const channel_id: string | undefined = msg.command.argumentTokens[0];
         if (channel_id !== undefined) {
             if (!isSnowflake(channel_id)) {
-                await msg.reply('Usage: /unlink_chat [Discord channel id]. Without an id, every linked channel is unlinked.');
+                await msg.replyPrivately('Usage: /unlink_chat [Discord channel id]. Without an id, every linked channel is unlinked.');
                 return;
             }
             const link: ChatLink | undefined = await chatLinkDao.getLinkByChannel(channel_id);
             if (!link || link.telegram_chat_id !== msg.chat.id) {
-                await msg.reply('That channel is not linked to this group.');
+                await msg.replyPrivately('That channel is not linked to this group.');
                 return;
             }
             await tearDown(discord, link);
-            await msg.reply(`Unlinked Discord channel ${channel_id}.`);
+            await msg.replyPrivately(`Unlinked Discord channel ${channel_id}.`);
             return;
         }
 
         const links: ChatLink[] = await chatLinkDao.getLinks(msg.chat.id);
         if (links.length === 0) {
-            await msg.reply('No Discord channels are linked to this group.');
+            await msg.replyPrivately('No Discord channels are linked to this group.');
             return;
         }
         await Promise.all(links.map(link => tearDown(discord, link)));
-        await msg.reply(`Unlinked ${links.length} Discord channel${links.length === 1 ? '' : 's'}.`);
+        await msg.replyPrivately(`Unlinked ${links.length} Discord channel${links.length === 1 ? '' : 's'}.`);
     } catch (err: any) {
-        await msg.reply(formatError(err));
+        await msg.replyPrivately(formatError(err));
     }
 };
