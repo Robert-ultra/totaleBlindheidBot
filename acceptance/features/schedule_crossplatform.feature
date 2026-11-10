@@ -11,6 +11,13 @@ Feature: scheduling rollcalls across Telegram and Discord
     And Discord channel "101011" is linked to the chat
     And Discord channel "101021" is linked to the chat
 
+  Scenario: Discord shows the scheduled time in each reader's own timezone
+    When the user sends "/schedule 3 hours"
+    Then the bot reply shows "in 3 hours" as a "r" date-time 3 hours ahead
+    And Discord channel "101011" receives a bot message timing the rollcall 3 hours ahead in Discord timestamps
+    When the user sends "/cancel"
+    Then the bot replies "Scheduled rollcall cancelled."
+
   Scenario: a Telegram schedule is confirmed in every linked channel
     When the user sends "/schedule 3 hours"
     Then the bot reply starts with "Rollcall scheduled for"
@@ -129,7 +136,7 @@ Feature: scheduling rollcalls across Telegram and Discord
     When Discord user "hana_cs" named "Hana" with id "101010000000000008" runs "/schedule" with time "3 hours" in channel "101011"
     Then the bot reply starts with "Rollcall scheduled for"
     And the bot reply contains "GMT+2"
-    And Discord channel "101021" receives a bot message containing "GMT+2" with buttons "I'm in, Maybe, No"
+    And Discord channel "101021" receives a bot message containing "Rollcall scheduled for <t:" with buttons "I'm in, Maybe, No"
     When Discord user "hana_cs" named "Hana" with id "101010000000000008" runs "/cancel" in channel "101011"
     Then the bot replies "Scheduled rollcall cancelled."
 

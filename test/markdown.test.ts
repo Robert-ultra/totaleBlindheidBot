@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { splitMessage, toDiscordMarkdown } from '../discord/markdown.js';
-import { bold, fmt, link } from '../format.js';
+import { bold, dateTime, fmt, link } from '../format.js';
 
 test('plain text is escaped so Discord does not format it', () => {
     assert.equal(toDiscordMarkdown({ text: 'a*b _c_ ~d~ |e| `f` \\g', entities: [] }), 'a\\*b \\_c\\_ \\~d\\~ \\|e\\| \\`f\\` \\\\g');
@@ -14,6 +14,14 @@ test('Telegram entities become Discord markdown', () => {
     assert.equal(toDiscordMarkdown({ text: 'x code y', entities: [{ type: 'code', offset: 2, length: 4 }] }), 'x `code` y');
     assert.equal(toDiscordMarkdown({ text: 'quote\nme', entities: [{ type: 'blockquote', offset: 0, length: 8 }] }), '> quote\n> me');
     assert.equal(toDiscordMarkdown({ text: 'a_b', entities: [{ type: 'spoiler', offset: 0, length: 3 }] }), '||a\\_b||');
+});
+
+test('a date-time becomes a Discord timestamp of the same instant', () => {
+    const at = new Date(1_800_000_000_000);
+    assert.equal(
+        toDiscordMarkdown(fmt`Scheduled for ${dateTime('15:00 GMT+2', at, 'wt')} (${dateTime('in 3 hours', at, 'r')})`),
+        'Scheduled for <t:1800000000:F> (<t:1800000000:R>)'
+    );
 });
 
 test('URLs stay as they are', () => {

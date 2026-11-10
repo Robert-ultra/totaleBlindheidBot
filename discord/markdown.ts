@@ -26,6 +26,9 @@ const wrap = (entity: MessageEntity, inner: string, raw: string): string => {
         case 'blockquote':
         case 'expandable_blockquote':
             return inner.split('\n').map(line => `> ${line}`).join('\n');
+        case 'date_time':
+            // Like Telegram's entity, Discord's timestamp shows in each reader's own timezone.
+            return `<t:${entity.unix_time}:${entity.date_time_format?.includes('r') ? 'R' : 'F'}>`;
         default:
             return inner;
     }
