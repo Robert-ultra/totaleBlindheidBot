@@ -194,6 +194,13 @@ const migrateDiscordNameColumn = async (conn: PoolConnection): Promise<void> => 
     }
 };
 
+// One-off migration for presence_event tables created before party existed.
+const migratePresencePartyColumn = async (conn: PoolConnection): Promise<void> => {
+    if (await tableExists(conn, 'presence_event')) {
+        await conn.query('ALTER TABLE presence_event ADD COLUMN IF NOT EXISTS party VARCHAR(64) NULL AFTER player_name');
+    }
+};
+
 // One-off migration: rsvp_message gains platform and channel, and a text message id (Discord ids
 // don't fit a JS number).
 const migrateRsvpMessagePlatform = async (conn: PoolConnection): Promise<void> => {
@@ -228,6 +235,7 @@ export const ensureSchema = async (): Promise<void> => {
         await migrateTelegramUserToUser(conn);
         await migrateDiscordNameColumn(conn);
         await migrateRsvpMessagePlatform(conn);
+        await migratePresencePartyColumn(conn);
         for (const statement of splitStatements(ddl)) {
             await conn.query(statement);
         }

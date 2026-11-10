@@ -19,14 +19,15 @@ class PresenceEventDAO {
             raw_score: row.raw_score ?? undefined,
             score_total: row.score_total ?? null,
             player_name: row.player_name ?? undefined,
+            party: row.party ?? undefined,
             created_at: row.created_at
         };
     }
 
     async appendEvent(event: Omit<PresenceEvent, 'id'>): Promise<number> {
         const res = await query<ResultSetHeader>(
-            'INSERT INTO presence_event (steam_id, user_id, playing, map, mode, raw_score, score_total, player_name, created_at) ' +
-            'VALUES (:steam_id, :user_id, :playing, :map, :mode, :raw_score, :score_total, :player_name, :created_at)',
+            'INSERT INTO presence_event (steam_id, user_id, playing, map, mode, raw_score, score_total, player_name, party, created_at) ' +
+            'VALUES (:steam_id, :user_id, :playing, :map, :mode, :raw_score, :score_total, :player_name, :party, :created_at)',
             {
                 steam_id: event.steam_id,
                 user_id: event.user_id,
@@ -36,6 +37,7 @@ class PresenceEventDAO {
                 raw_score: event.raw_score ?? null,
                 score_total: event.score_total ?? null,
                 player_name: event.player_name ?? null,
+                party: event.party ?? null,
                 created_at: event.created_at
             }
         );
@@ -46,7 +48,7 @@ class PresenceEventDAO {
     // worth recording or a repeat to drop.
     async getLastEvent(steam_id: string): Promise<PresenceEvent | null> {
         const rows = await query<RowDataPacket[]>(
-            'SELECT id, steam_id, user_id, playing, map, mode, raw_score, score_total, player_name, created_at ' +
+            'SELECT id, steam_id, user_id, playing, map, mode, raw_score, score_total, player_name, party, created_at ' +
             'FROM presence_event WHERE steam_id = :steam_id ORDER BY id DESC LIMIT 1',
             { steam_id }
         );
@@ -57,7 +59,7 @@ class PresenceEventDAO {
     // window match derivation replays.
     async getEventsAfter(steam_id: string, afterId: number): Promise<PresenceEvent[]> {
         const rows = await query<RowDataPacket[]>(
-            'SELECT id, steam_id, user_id, playing, map, mode, raw_score, score_total, player_name, created_at ' +
+            'SELECT id, steam_id, user_id, playing, map, mode, raw_score, score_total, player_name, party, created_at ' +
             'FROM presence_event WHERE steam_id = :steam_id AND id > :afterId ORDER BY id ASC',
             { steam_id, afterId }
         );
@@ -68,10 +70,10 @@ class PresenceEventDAO {
     // before the range (its state as the match began) plus its events within the range.
     async getStreamAround(steam_id: string, from: Date, to: Date): Promise<PresenceEvent[]> {
         const rows = await query<RowDataPacket[]>(
-            '(SELECT id, steam_id, user_id, playing, map, mode, raw_score, score_total, player_name, created_at ' +
+            '(SELECT id, steam_id, user_id, playing, map, mode, raw_score, score_total, player_name, party, created_at ' +
             ' FROM presence_event WHERE steam_id = :steam_id AND created_at < :from ORDER BY id DESC LIMIT 1) ' +
             'UNION ALL ' +
-            '(SELECT id, steam_id, user_id, playing, map, mode, raw_score, score_total, player_name, created_at ' +
+            '(SELECT id, steam_id, user_id, playing, map, mode, raw_score, score_total, player_name, party, created_at ' +
             ' FROM presence_event WHERE steam_id = :steam_id AND created_at >= :from AND created_at <= :to) ' +
             'ORDER BY id ASC',
             { steam_id, from, to }

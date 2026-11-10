@@ -20,6 +20,8 @@ export interface PresenceEvent {
     raw_score?: string;
     score_total?: number | null;
     player_name?: string;
+    // The Steam party (lobby) the account was in; people in one match together share it.
+    party?: string;
     created_at: Date;
 }
 
@@ -269,9 +271,10 @@ export interface CoPlayer {
 }
 
 // Reconstruct who was in the same match as `segment` by replaying the other tracked accounts'
-// streams: at each of the segment's observation points, another account is a co-player if its
-// state at that moment was in CS2 on a compatible map and mode with a score total within
-// tolerance — the same test the live version applied per tick, now answered retrospectively.
+// streams. At each of the segment's observation points, another account in CS2 on a compatible
+// map and mode either agrees with the segment (same party, or failing that a score total within
+// tolerance) or contradicts it. A co-player agrees at least once and never contradicts after
+// that: two matches on the same map pass through the same scores, but do not stay in step.
 // `otherStreams` maps steam_id → that account's events (ordered by id), and may include events
 // from before the segment so state-at-time is known; the segment's own account is skipped by
 // the caller. Accounts belonging to the segment's own user are skipped here.
@@ -293,8 +296,13 @@ export const findCoPlayers = (
         let runMap: string | undefined;
         let runMode: string | undefined;
         let runMax: number | null = null;
+        let runParty: string | undefined;
+        let coPlayer: CoPlayer | undefined;
+        let contradicted = false;
 
-        for (const e of segment.events) {
+        // Only while playing: once stopped, the segment says nothing to compare others with.
+        for (const e of segment.events.filter(event => event.playing)) {
+            runParty = e.party ?? runParty;
             if (e.map && !runMap) {
                 runMap = e.map;
             }
@@ -322,16 +330,20 @@ export const findCoPlayers = (
                 continue;
             } else if (modeChanged(runMode, o.mode)) {
                 continue;
-            } else if (runMax != null && o.score_total != null && Math.abs(runMax - o.score_total) > config.resetTolerance) {
-                continue;
             }
 
-            const existing = byUser.get(o.user_id);
-            if (!existing) {
-                byUser.set(o.user_id, { user_id: o.user_id, player_name: o.player_name });
-            } else if (o.player_name) {
-                existing.player_name = o.player_name;
+            const agrees: boolean = runParty && o.party
+                ? runParty === o.party
+                : !(runMax != null && o.score_total != null && Math.abs(runMax - o.score_total) > config.resetTolerance);
+            if (!agrees) {
+                contradicted = coPlayer !== undefined;
+                continue;
             }
+            coPlayer = { user_id: o.user_id, player_name: o.player_name ?? coPlayer?.player_name };
+        }
+
+        if (coPlayer && !contradicted) {
+            byUser.set(coPlayer.user_id, { ...coPlayer, player_name: coPlayer.player_name ?? byUser.get(coPlayer.user_id)?.player_name });
         }
     }
 

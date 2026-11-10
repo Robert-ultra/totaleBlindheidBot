@@ -367,18 +367,20 @@ class SteamService {
         console.debug(`User update: ${playerName} (${steamId}) is playing CS2`);
 
         // Extract game info from rich presence
-        let map: string | undefined, status: string | undefined, score: string | undefined, mode: string | undefined;
+        let map: string | undefined, status: string | undefined, score: string | undefined, mode: string | undefined, party: string | undefined;
         const rp = user.rich_presence;
         if (Array.isArray(rp)) {
             map = rp.find((i: SteamRichPresenceItem) => i.key === 'game:map' || i.key === 'map')?.value;
             status = rp.find((i: SteamRichPresenceItem) => i.key === 'status')?.value;
             score = rp.find((i: SteamRichPresenceItem) => i.key === 'game:score' || i.key === 'score')?.value;
             mode = rp.find((i: SteamRichPresenceItem) => i.key === 'game:mode' || i.key === 'mode')?.value;
+            party = rp.find((i: SteamRichPresenceItem) => i.key === 'steam_player_group')?.value;
         } else if (rp && typeof rp === 'object') {
             map = rp['game:map'] || rp['map'];
             status = rp['status'];
             score = rp['game:score'] || rp['score'];
             mode = rp['game:mode'] || rp['mode'];
+            party = rp['steam_player_group'];
         }
 
         // The raw status value (e.g. "Competitive"), before the verbose summary overrides it.
@@ -414,7 +416,7 @@ class SteamService {
         // Record the presence transition and derive match progress / boundaries from the stream,
         // regardless of any chat's live-update setting; history is a separate pull
         // (/game_history) and the end-of-game notification is gated per chat at finalisation.
-        await this.recordPresence(steamId, tgUserId, { playing: true, map, mode, rawScore, playerName });
+        await this.recordPresence(steamId, tgUserId, { playing: true, map, mode, rawScore, playerName, party: party || undefined });
 
         // Per-round outcomes of the current match, replayed from the (just-updated) stream.
         const rounds = await this.getLiveRounds(steamId);
@@ -701,7 +703,7 @@ class SteamService {
     private recordPresence(
         steamId: string,
         tgUserId: number,
-        snapshot: { playing: boolean; map?: string; mode?: string; rawScore?: string; playerName?: string }
+        snapshot: { playing: boolean; map?: string; mode?: string; rawScore?: string; playerName?: string; party?: string }
     ): Promise<void> {
         return this.withStreamLock(steamId, async () => {
             try {
@@ -731,6 +733,7 @@ class SteamService {
                     raw_score: snapshot.rawScore,
                     score_total: this.parseRawScore(snapshot.rawScore)?.total ?? null,
                     player_name: snapshot.playerName,
+                    party: snapshot.party,
                     created_at: new Date()
                 });
 
@@ -924,7 +927,8 @@ class SteamService {
     // times, so the first finaliser posts the message and each later one edits it to add names.
     //
     // Same-match candidates are the recently-finalised game_history rows in this chat with the same
-    // map + mode, the same win/loss/tie result, and a round total within RESET_TOLERANCE. Signature
+    // map + mode, the same win/loss/tie result, a round total within RESET_TOLERANCE, and a player
+    // who saw this one in the match or was seen by them (co-players). Signature
     // alone can't distinguish "another player in the same match" from "the same player in a *later*
     // match on the same map", so we only join an existing announcement that this player does not
     // already OWN a row in — a player is in any given match instance exactly once, so an existing
@@ -939,8 +943,10 @@ class SteamService {
 
         const since = new Date(Date.now() - EOG_GROUP_WINDOW_MS);
         const candidates = await this.gameHistoryDao.getRecentSiblingMatches(chatId, match.map, match.mode, since);
+        const sawEachOther = (c: SiblingMatch): boolean =>
+            c.co_players.some(co => co.tg_user_id === match.user_id) || (match.co_players || []).some(co => co.tg_user_id === c.user_id);
         const sameSig = candidates.filter(c => {
-            if (c.id === historyId) {
+            if (c.id === historyId || !sawEachOther(c)) {
                 return false;
             } else if (this.matchResult(c.score) !== result) {
                 return false;

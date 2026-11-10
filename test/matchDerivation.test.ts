@@ -18,7 +18,7 @@ const config: DerivationConfig = {
 let nextId = 1;
 const ev = (
     seconds: number,
-    opts: { playing?: boolean; map?: string; mode?: string; score?: string; user?: number; name?: string } = {}
+    opts: { playing?: boolean; map?: string; mode?: string; score?: string; user?: number; name?: string; party?: string } = {}
 ): PresenceEvent => ({
     id: nextId++,
     steam_id: 'A',
@@ -29,6 +29,7 @@ const ev = (
     raw_score: opts.score,
     score_total: parseRawScore(opts.score)?.total ?? null,
     player_name: opts.name,
+    party: opts.party,
     created_at: at(seconds)
 });
 
@@ -268,6 +269,58 @@ test('co-player: different map, diverging score, stopped, or own alt account do 
         ['C', otherMap], ['D', divergent], ['E', stopped], ['F', ownAlt]
     ]), config);
     assert.equal(cos.length, 0);
+});
+
+const inferno = (seconds: number, score: string, extra: { user?: number; party?: string } = {}): PresenceEvent =>
+    ev(seconds, { map: 'Inferno', mode: 'Competitive', score, ...extra });
+
+const coPlayersOf = (own: PresenceEvent[], other: PresenceEvent[]): number[] => {
+    const { closed, open } = segmentStream(own, at(3600), config);
+    return findCoPlayers(closed[0] ?? open!, new Map([['B', other.map(e => ({ ...e, steam_id: 'B' }))]]), config).map(co => co.user_id);
+};
+
+test('co-player: the same score in another party is another match', () => {
+    nextId = 1;
+    assert.deepEqual(coPlayersOf(
+        [inferno(0, '5-3', { party: 'p1' }), inferno(60, '6-3', { party: 'p1' })],
+        [inferno(-10, '5-3', { user: 220, party: 'p2' }), inferno(50, '6-3', { user: 220, party: 'p2' })]
+    ), []);
+});
+
+test('co-player: the same party is the same match, however far the reported scores are apart', () => {
+    nextId = 1;
+    assert.deepEqual(coPlayersOf(
+        [inferno(0, '5-3', { party: 'p1' }), inferno(60, '9-3', { party: 'p1' })],
+        [inferno(-10, '5-3', { user: 221, party: 'p1' })]
+    ), [221]);
+});
+
+test('co-player: without parties, matches that pass through the same score but drift apart are separate', () => {
+    nextId = 1;
+    assert.deepEqual(coPlayersOf(
+        [inferno(0, '5-3'), inferno(300, '6-3'), inferno(600, '7-3')],
+        [inferno(-10, '5-3', { user: 222 }), inferno(290, '9-6', { user: 222 }), inferno(590, '12-9', { user: 222 })]
+    ), []);
+});
+
+test('co-player: having stopped is not being in step with whoever plays on at a similar score', () => {
+    nextId = 1;
+    assert.deepEqual(coPlayersOf(
+        [inferno(0, '13-7'), ev(60, { playing: false })],
+        [inferno(30, '13-7', { user: 224 })]
+    ), []);
+    assert.deepEqual(coPlayersOf(
+        [inferno(0, '13-7', { party: 'p1' }), ev(60, { playing: false })],
+        [inferno(-10, '13-7', { user: 225, party: 'p2' })]
+    ), []);
+});
+
+test('co-player: someone who was still in another match when this one started is recorded once in step', () => {
+    nextId = 1;
+    assert.deepEqual(coPlayersOf(
+        [inferno(0, '0-0'), inferno(300, '3-2'), inferno(600, '6-4')],
+        [inferno(-10, '13-9', { user: 223 }), inferno(290, '3-2', { user: 223 }), inferno(590, '6-4', { user: 223 })]
+    ), [223]);
 });
 
 test('co-player: someone who left mid-match is still recorded (point-in-time semantics)', () => {
