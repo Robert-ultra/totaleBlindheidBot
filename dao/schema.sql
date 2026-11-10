@@ -181,6 +181,7 @@ CREATE TABLE IF NOT EXISTS presence_event (
     raw_score   VARCHAR(64)  NULL,
     score_total INT          NULL,
     player_name VARCHAR(255) NULL,
+    party       VARCHAR(64)  NULL,
     created_at  DATETIME(3)  NOT NULL,
     PRIMARY KEY (id),
     KEY idx_presence_event_stream (steam_id, id),

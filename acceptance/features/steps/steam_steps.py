@@ -77,6 +77,22 @@ def step_steam_named_playing_map_score(context: Context, steam_id: str, name: st
     })
 
 
+# Starts with "party" rather than "user" so the name+score step above can't also match it.
+@when('Steam reports party "{party}" member "{steam_id}" playing CS2 as "{name}" with score "{score}" on map "{map_name}"')
+def step_steam_party_playing(context: Context, party: str, steam_id: str, name: str, score: str, map_name: str) -> None:
+    _capture_steam_baseline(context)
+    helpers.steam_report(steam_id, {
+        "player_name": name,
+        "gameid": "730",
+        "rich_presence": [
+            {"key": "game:map", "value": map_name},
+            {"key": "status", "value": "Competitive"},
+            {"key": "game:score", "value": score},
+            {"key": "steam_player_group", "value": party},
+        ],
+    })
+
+
 # A varying "summarised as" rich_presence_string with a stable "Competitive" status: the game
 # mode must come from the stable status, not the changing summary, or the match would split.
 # "summarised as" sits before "with score" so the existing score/map step can't greedily match.

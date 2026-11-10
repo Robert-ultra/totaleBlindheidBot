@@ -142,8 +142,9 @@ Feature: CS2 game history
     Then the bot reply contains "76561198000000971"
     When Steam mappings are refreshed
     And Steam reports user "76561198000000970" playing CS2 as "Alpha" with score "13-7" on map "Vertigo"
-    And Steam reports user "76561198000000970" stopped playing
     And Steam reports user "76561198000000971" playing CS2 as "Bravo" with score "13-7" on map "Vertigo"
+    And Steam reports user "76561198000000970" stopped playing
+    And the matches of Steam user "76561198000000970" have been recorded
     And Steam reports user "76561198000000971" stopped playing
     Then chat 2110 eventually receives a new Steam message containing "won a game"
     # The second finaliser edits the first's message to add their name (order is irrelevant), so a
@@ -226,3 +227,52 @@ Feature: CS2 game history
     Then chat 2113 eventually receives a new Steam message containing "lost a game"
     When the user sends "/game_history"
     Then the bot reply contains "14-16"
+
+  Scenario: parties in separate matches with the same score are announced separately
+    Given a chat with id 2120
+    When user 6040 sends "/steam_user_id 76561198000001040"
+    Then the bot reply contains "76561198000001040"
+    When user 6041 sends "/steam_user_id 76561198000001041"
+    Then the bot reply contains "76561198000001041"
+    When Steam mappings are refreshed
+    And Steam reports party "alphas" member "76561198000001040" playing CS2 as "Alpha" with score "13-7" on map "Vertigo"
+    And Steam reports party "bravos" member "76561198000001041" playing CS2 as "Bravo" with score "13-7" on map "Vertigo"
+    And Steam reports user "76561198000001040" stopped playing
+    And Steam reports user "76561198000001041" stopped playing
+    Then chat 2120 eventually receives a new Steam message "🏆 Alpha won a game on Vertigo (Competitive): 1️⃣3️⃣-7️⃣"
+    And chat 2120 eventually receives a new Steam message "🏆 Bravo won a game on Vertigo (Competitive): 1️⃣3️⃣-7️⃣"
+
+  Scenario: a party is announced together even when their last reported scores differ
+    Given a chat with id 2121
+    When user 6022 sends "/steam_user_id 76561198000001022"
+    Then the bot reply contains "76561198000001022"
+    When user 6023 sends "/steam_user_id 76561198000001023"
+    Then the bot reply contains "76561198000001023"
+    When Steam mappings are refreshed
+    And Steam reports party "squad" member "76561198000001022" playing CS2 as "Alpha" with score "8-7" on map "Vertigo"
+    And Steam reports party "squad" member "76561198000001023" playing CS2 as "Bravo" with score "13-5" on map "Vertigo"
+    And Steam reports party "squad" member "76561198000001022" playing CS2 as "Alpha" with score "13-7" on map "Vertigo"
+    And Steam reports user "76561198000001022" stopped playing
+    And Steam reports user "76561198000001023" stopped playing
+    And the matches of Steam user "76561198000001022" have been recorded
+    And the matches of Steam user "76561198000001023" have been recorded
+    Then chat 2121 has received 1 Steam messages containing "won a game"
+    And the Steam message in chat 2121 is edited to contain "Alpha"
+    And the Steam message in chat 2121 is edited to contain "Bravo"
+
+  Scenario: matches that only pass through the same score are announced separately
+    Given a chat with id 2122
+    When user 6024 sends "/steam_user_id 76561198000001024"
+    Then the bot reply contains "76561198000001024"
+    When user 6025 sends "/steam_user_id 76561198000001025"
+    Then the bot reply contains "76561198000001025"
+    When Steam mappings are refreshed
+    And Steam reports user "76561198000001024" playing CS2 as "Alpha" with score "5-3" on map "Mirage"
+    And Steam reports user "76561198000001025" playing CS2 as "Bravo" with score "5-3" on map "Mirage"
+    And Steam reports user "76561198000001024" playing CS2 as "Alpha" with score "13-3" on map "Mirage"
+    And Steam reports user "76561198000001025" playing CS2 as "Bravo" with score "5-8" on map "Mirage"
+    And Steam reports user "76561198000001025" playing CS2 as "Bravo" with score "5-13" on map "Mirage"
+    And Steam reports user "76561198000001024" stopped playing
+    And Steam reports user "76561198000001025" stopped playing
+    Then chat 2122 eventually receives a new Steam message "🏆 Alpha won a game on Mirage (Competitive): 1️⃣3️⃣-3️⃣"
+    And chat 2122 eventually receives a new Steam message "☠️ Bravo lost a game on Mirage (Competitive): 5️⃣-1️⃣3️⃣"
