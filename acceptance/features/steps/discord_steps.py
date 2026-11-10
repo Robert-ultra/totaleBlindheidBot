@@ -213,6 +213,16 @@ def step_channel_no_bot_messages(context: Context, channel_id: str) -> None:
     assert not posted, f"Expected no bot message in channel {channel_id}, got {_describe(posted)}"
 
 
+@then('Discord channel "(?P<channel_id>\\d+)" sees the bot message containing "(?P<text>[^"]+)" deleted')
+def step_channel_bot_message_deleted(context: Context, channel_id: str, text: str) -> None:
+    def deleted() -> bool:
+        outbox: List[Dict[str, Any]] = helpers.discord_outbox(channel_id)
+        posted: List[str] = [m["message_id"] for m in outbox if _is_bot_message(m) and text in m["content"]]
+        return any(m["method"] == "deleteMessage" and m["message_id"] in posted for m in outbox)
+
+    assert helpers.wait_until(deleted), f"No bot message containing {text!r} was deleted in channel {channel_id}"
+
+
 @then('Discord channel "(?P<channel_id>\\d+)" receives a bot message')
 def step_channel_receives_bot_message(context: Context, channel_id: str) -> None:
     is_hit = lambda m: _is_bot_message(m) and m["content"] == context.text

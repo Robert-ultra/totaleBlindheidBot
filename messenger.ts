@@ -131,6 +131,23 @@ export const editDiscordCopies = async (chat_id: number, message_id: number, con
         .catch((err: Error) => console.error(`Could not edit Discord message ${copy.message_id} in channel ${copy.chat_id}:`, err))));
 };
 
+export const deleteMirrored = async (bot: Bot, chat_id: number, message_id: number): Promise<void> => {
+    await bot.api.deleteMessage({ chat_id, message_id });
+    const origin: RelayedMessage | undefined = await relayedDao.find({ platform: 'telegram', chat_id: String(chat_id), message_id: String(message_id) });
+    if (!origin) {
+        return;
+    }
+    const group: RelayedMessage[] = await relayedDao.group(origin);
+    const service: DiscordService | null = DiscordService.instance;
+    const links: ChatLink[] = service ? await chatLinkDao.getLinks(chat_id) : [];
+    await Promise.all(group.filter(message => message.platform === 'discord').map(copy => {
+        const link: ChatLink | undefined = links.find(candidate => candidate.discord_channel_id === copy.chat_id);
+        return link && service!.deleteRelayed(link, copy.message_id, copy.kind as CopyKind)
+            .catch((err: Error) => console.error(`Could not delete Discord message ${copy.message_id} in channel ${copy.chat_id}:`, err));
+    }));
+    await relayedDao.forget(group.map(message => message.id));
+};
+
 export const editMirrored = async (bot: Bot, chat_id: number, message_id: number, text: Formatted): Promise<void> => {
     await bot.api.editMessageText({ ...messageText(text), chat_id, message_id });
     await editDiscordCopies(chat_id, message_id, toDiscordMarkdown(text))

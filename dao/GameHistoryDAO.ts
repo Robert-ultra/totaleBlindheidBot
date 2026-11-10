@@ -48,6 +48,16 @@ export interface SiblingMatch {
     co_players: GameHistoryCoPlayer[];
 }
 
+export interface FinishedMatch {
+    id: number;
+    chat_id: number;
+    user_id: number;
+    mode?: string;
+    map?: string;
+    score?: string;
+    message_id: number | null;
+}
+
 class GameHistoryDAO {
     private _coPlayerFromRow(row: RowDataPacket): GameHistoryCoPlayer | null {
         if (row.co_user_id == null) {
@@ -293,6 +303,23 @@ class GameHistoryDAO {
     }
 
     // Delete a match record (its co-player rows cascade). Returns whether a row was deleted.
+    // A user's matches, in every chat, that ended at or after `since`.
+    async getMatchesEndedSince(user_id: number, since: Date): Promise<FinishedMatch[]> {
+        const rows = await query<RowDataPacket[]>(
+            'SELECT id, chat_id, mode, map, score, message_id FROM game_history WHERE user_id = :user_id AND ended_at >= :since',
+            { user_id, since }
+        );
+        return rows.map(row => ({
+            id: Number(row.id),
+            chat_id: Number(row.chat_id),
+            user_id,
+            mode: row.mode ?? undefined,
+            map: row.map ?? undefined,
+            score: row.score ?? undefined,
+            message_id: row.message_id == null ? null : Number(row.message_id)
+        }));
+    }
+
     async deleteGameHistoryEntry(id: number): Promise<boolean> {
         const res = await query<ResultSetHeader>(
             'DELETE FROM game_history WHERE id = :id',

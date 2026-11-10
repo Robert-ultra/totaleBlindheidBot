@@ -83,6 +83,22 @@ export const parseRawScore = (score?: string): { a: number; b: number; total: nu
     return { a, b, total: a + b };
 };
 
+export interface MatchState {
+    map?: string;
+    mode?: string;
+    score?: string;
+}
+
+// Whether what an account is seen playing now is a match recorded as finished, still going:
+// the same map and mode, with neither side's score below where it stood.
+export const continuesMatch = (finished: MatchState, current: MatchState): boolean => {
+    const before = parseRawScore(finished.score);
+    const now = parseRawScore(current.score);
+    return !!before && !!now && now.a >= before.a && now.b >= before.b
+        && !!finished.map && finished.map.toLowerCase() === current.map?.toLowerCase()
+        && !modeChanged(finished.mode, current.mode);
+};
+
 const maxTotal = (seg: MatchSegment): number | null => {
     const parsed = parseRawScore(seg.max_score);
     return parsed ? parsed.total : null;

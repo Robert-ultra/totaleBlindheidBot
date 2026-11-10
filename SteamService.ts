@@ -4,16 +4,16 @@ import { Bot } from 'node-telegram-bot-api';
 import UserDAO, { UserSettings } from './dao/UserDAO.js';
 import ChatDAO, { ChatSettings } from './dao/ChatDAO.js';
 import GameUpdateDAO, { GameUpdate, StoredGameMessage } from './dao/GameUpdateDAO.js';
-import GameHistoryDAO, { GameHistoryEntry, GameHistoryCoPlayer, SessionMatch, SiblingMatch } from './dao/GameHistoryDAO.js';
+import GameHistoryDAO, { FinishedMatch, GameHistoryEntry, GameHistoryCoPlayer, SessionMatch, SiblingMatch } from './dao/GameHistoryDAO.js';
 import PresenceEventDAO from './dao/PresenceEventDAO.js';
 import RollcallPlayerDAO from './dao/RollcallPlayerDAO.js';
 import { bold, fmt, Formatted, sameFormatted } from './format.js';
-import { editMirrored, sendMirrored } from './messenger.js';
+import { deleteMirrored, editMirrored, sendMirrored } from './messenger.js';
 import { parseMention } from './mention.js';
 import { saveSteamFile, readSteamFile, withTransaction } from './dao/Database.js';
 import {
-    segmentStream, findCoPlayers, deriveRounds, parseRawScore as parseRawScoreFn,
-    DerivationConfig, MatchSegment, PresenceEvent, RoundOutcome
+    segmentStream, findCoPlayers, deriveRounds, continuesMatch, parseRawScore as parseRawScoreFn,
+    DerivationConfig, MatchSegment, MatchState, PresenceEvent, RoundOutcome
 } from './matchDerivation.js';
 
 // A finished match with no further score progress is recorded once it has been idle
@@ -41,6 +41,10 @@ const RESET_TOLERANCE = 2;
 // that returns to the old range within this window is folded away as presence noise instead of
 // splitting the match. Overridable for tests.
 const MATCH_RESET_CONFIRM_MS = Number(process.env.MATCH_RESET_CONFIRM_MS) || 30 * 1000;
+
+// How long after a match was recorded as finished its account showing up further into the same
+// match still withdraws that record: a crash or reconnect, not a new match. Overridable.
+const MATCH_RESUME_MS = Number(process.env.MATCH_RESUME_MS) || 5 * 60 * 1000;
 
 // How long raw presence events are kept after they've been finalised into history. The log is
 // what makes retrospective (re-)derivation possible, so keep a forensically useful window.
@@ -395,7 +399,9 @@ class SteamService {
         // value (e.g. "Competitive"), captured BEFORE rich_presence_string overrides status
         // for display. Using the volatile summary here would make the mode change mid-match
         // and spuriously split one match into many.
-        if (!mode) {
+        // Only in a match (a map is known): in the menu or a lobby the status says something
+        // else, which must not read as the match's mode having changed.
+        if (!mode && map) {
             mode = rawStatus;
         }
 
@@ -738,10 +744,46 @@ class SteamService {
                 });
 
                 await this.deriveAndFinalize(steamId);
+                await this.retractContinuedMatches(tgUserId, { map: snapshot.map, mode: snapshot.mode, score: snapshot.rawScore });
             } catch (err) {
                 console.error(`Error recording presence for Steam ID ${steamId} (user ${tgUserId}):`, err);
             }
         });
+    }
+
+    // A match recorded as finished that the account is then seen further into never ended (the
+    // game crashed, or the player reconnected): its record and announcement are withdrawn, and the
+    // match is recorded once it really ends.
+    private async retractContinuedMatches(tgUserId: number, current: MatchState): Promise<void> {
+        if (!this.parseRawScore(current.score)) {
+            return;
+        }
+        const finished: FinishedMatch[] = await this.gameHistoryDao.getMatchesEndedSince(tgUserId, new Date(Date.now() - MATCH_RESUME_MS));
+        for (const match of finished.filter(candidate => continuesMatch(candidate, current))) {
+            await this.withLock(`eog_${match.chat_id}`, () => this.retractMatch(match));
+        }
+    }
+
+    // The announcement goes when it was only this player's; otherwise their name comes off it.
+    private async retractMatch(match: FinishedMatch): Promise<void> {
+        await this.gameHistoryDao.deleteGameHistoryEntry(match.id);
+        if (match.message_id == null) {
+            return;
+        }
+        const announced: SiblingMatch[] = (await this.gameHistoryDao.getRecentSiblingMatches(
+            match.chat_id, match.map, match.mode, new Date(Date.now() - EOG_GROUP_WINDOW_MS)
+        )).filter(sibling => sibling.message_id === match.message_id);
+        const result = this.matchResult(announced[0]?.score);
+        if (!result) {
+            await deleteMirrored(this.bot, match.chat_id, match.message_id);
+            return;
+        }
+        const names = new Map<number, string>(announced.flatMap(sibling => [
+            ...sibling.co_players.map((co): [number, string] => [co.tg_user_id, co.name]),
+            [sibling.user_id, sibling.player_name || String(sibling.user_id)] as [number, string]
+        ]));
+        names.delete(match.user_id);
+        await editMirrored(this.bot, match.chat_id, match.message_id, this.endOfGameText([...names.values()], result, match.map, match.mode, announced[0].score));
     }
 
     // Replay the stream's unfinalised events and finalise every segment the derivation considers

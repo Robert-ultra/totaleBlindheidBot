@@ -5,7 +5,7 @@ import ChatLinkDAO from '../dao/ChatLinkDAO.js';
 import RelayedMessageDAO, { RelayedMessage } from '../dao/RelayedMessageDAO.js';
 import DiscordService from '../discord/DiscordService.js';
 import { bold, fmt } from '../format.js';
-import { Broadcast, editDiscordCopies, editMirrored, rememberCopies, sendMirrored } from '../messenger.js';
+import { Broadcast, deleteMirrored, editDiscordCopies, editMirrored, rememberCopies, sendMirrored } from '../messenger.js';
 
 const text = fmt`${bold('Ann')} is playing`;
 
@@ -133,4 +133,35 @@ test('Discord copies of a message not relayed are left alone', async () => {
     await editDiscordCopies(-7, 50, 'Go!');
 
     assert.deepEqual(calls, []);
+});
+
+test('deleting a mirrored message deletes its Discord copies and forgets them', async () => {
+    const calls: unknown[] = [];
+    const bot = { api: { deleteMessage: async (params: unknown) => calls.push(['deleteMessage', params]) } } as unknown as Bot;
+    DiscordService.instance = {
+        deleteRelayed: async (link: { discord_channel_id: string }, message_id: string, kind: string) => calls.push(['deleteRelayed', link.discord_channel_id, message_id, kind])
+    } as unknown as DiscordService;
+    mock.method(ChatLinkDAO.prototype, 'getLinks', async () => [{ discord_channel_id: 'a' }, { discord_channel_id: 'b' }]);
+    mock.method(RelayedMessageDAO.prototype, 'find', async () => relayed({}));
+    mock.method(RelayedMessageDAO.prototype, 'group', async () => [
+        relayed({}),
+        relayed({ id: 2, origin_id: 1, kind: 'bot', platform: 'discord', chat_id: 'a', message_id: 'copy-in-a' }),
+        relayed({ id: 3, origin_id: 1, kind: 'bot', platform: 'discord', chat_id: 'unlinked', message_id: 'copy-elsewhere' })
+    ]);
+    const forget = mock.method(RelayedMessageDAO.prototype, 'forget', async () => undefined);
+
+    await deleteMirrored(bot, -7, 50);
+
+    assert.deepEqual(calls, [['deleteMessage', { chat_id: -7, message_id: 50 }], ['deleteRelayed', 'a', 'copy-in-a', 'bot']]);
+    assert.deepEqual(forget.mock.calls.map(call => call.arguments), [[[1, 2, 3]]]);
+});
+
+test('deleting a message that was never mirrored only deletes it on Telegram', async () => {
+    const calls: unknown[] = [];
+    const bot = { api: { deleteMessage: async (params: unknown) => calls.push(['deleteMessage', params]) } } as unknown as Bot;
+    mock.method(RelayedMessageDAO.prototype, 'find', async () => undefined);
+
+    await deleteMirrored(bot, -7, 50);
+
+    assert.deepEqual(calls, [['deleteMessage', { chat_id: -7, message_id: 50 }]]);
 });
