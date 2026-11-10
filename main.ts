@@ -8,7 +8,8 @@ import { Bot, CallbackQuery, Context, Message } from 'node-telegram-bot-api';
 import { ButtonInteraction, ChatInputCommandInteraction, MessageFlags } from 'discord.js';
 import ScheduleDAO from './dao/ScheduleDAO.js';
 import RsvpDAO from './dao/RsvpDAO.js';
-import UserDAO from './dao/UserDAO.js';
+import UserDAO, { User } from './dao/UserDAO.js';
+import TelegramMessageIntake from './TelegramMessageIntake.js';
 import SteamService from './SteamService.js';
 import GitHubService from './GitHubService.js';
 import DiscordService, { SlashCommand } from './discord/DiscordService.js';
@@ -331,20 +332,13 @@ router.route('rollcall_get_players', rollcallGetPlayersHandler, {
     discord: {}
 });
 
+const telegramMessages = new TelegramMessageIntake(userDao, (msg: Message, user: User) => {
+    router.handle(msg, user);
+    relayFromTelegram(bot, msg).catch((err: Error) => console.error('Error relaying Telegram message:', err));
+});
 // Don't return handler work: the poll loop awaits it before fetching the next update.
 bot.on('message', (ctx: Context) => {
-    const msg: Message = ctx.message!;
-    if (!msg.from) {
-        return;
-    }
-    userDao.fromTelegram(msg.from)
-        .then(user => {
-            userDao.addUserChat(user.id, msg.chat.id)
-                .catch((err: Error) => console.error('Error adding user chat:', err));
-            router.handle(msg, user);
-            relayFromTelegram(bot, msg).catch((err: Error) => console.error('Error relaying Telegram message:', err));
-        })
-        .catch((err: Error) => console.error('Error recording message sender:', err));
+    telegramMessages.receive(ctx.message!).catch((err: Error) => console.error('Error recording message sender:', err));
 });
 
 bot.on('edited_message', (ctx: Context) => {
