@@ -42,6 +42,32 @@ Feature: steam_user_id command
     When user 5822 sends "/steam_user_id user5821 76561198000000023"
     Then the bot replies "Only the admin can set Steam IDs for other users."
 
+  Scenario: a Steam account that has not befriended the bot is told how to
+    Given a chat with id 1708
+    And a user with id 5831 and first name "Tester"
+    And Steam account "76561198000000031" is not a friend of the bot
+    When the user sends "/steam_user_id 76561198000000031, 76561198000000032"
+    Then the bot replies
+      """
+      Your Steam user ID(s) has been set to 76561198000000031, 76561198000000032
+
+      Note: 76561198000000031 is not on my Steam friends list yet. I only get game updates from friends, so add me on Steam: https://steamcommunity.com/profiles/76561190000000000
+      """
+
+  Scenario: the admin is told when the accounts they set have not befriended the bot
+    Given a chat with id 1709
+    And Steam account "76561198000000033" is not a friend of the bot
+    And Steam account "76561198000000034" is not a friend of the bot
+    When user 5833 sends "/hi"
+    Then the bot replies "Hello to you too, User5833!"
+    When user 9999 sends "/steam_user_id @user5833 76561198000000033, 76561198000000034"
+    Then the bot replies
+      """
+      Steam user ID(s) for @user5833 has been set to 76561198000000033, 76561198000000034
+
+      Note: 76561198000000033, 76561198000000034 are not on my Steam friends list yet. I only get game updates from friends, so add me on Steam: https://steamcommunity.com/profiles/76561190000000000
+      """
+
   Scenario: a non-admin cannot set Steam IDs for someone else
     Given a chat with id 1704
     When user 5814 sends "/steam_user_id @user5811 76561198000000015"

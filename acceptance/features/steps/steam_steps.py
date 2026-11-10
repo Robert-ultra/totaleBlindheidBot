@@ -1,7 +1,7 @@
 """Steps for driving the mocked Steam layer via its control server."""
 from typing import Any, Callable, Dict, List
 
-from behave import when, then, use_step_matcher
+from behave import given, when, then, use_step_matcher
 from behave.runner import Context
 
 import helpers
@@ -12,6 +12,11 @@ use_step_matcher("parse")
 def _capture_steam_baseline(context: Context) -> None:
     context.steam_chat = context.chat_id
     context.steam_baseline = len(helpers.get_outbox(context.chat_id))
+
+
+@given('Steam account "{steam_id}" is not a friend of the bot')
+def step_steam_stranger(context: Context, steam_id: str) -> None:
+    helpers.steam_declare_strangers([steam_id])
 
 
 @when('Steam mappings are refreshed')

@@ -22,12 +22,17 @@ const steamGuardState = { requested: false, called: false, code: null };
 
 const personaRequests = [];
 
+// Everyone is a friend of the bot's account, except the ids behave declares strangers.
+const strangers = new Set();
+
 class FakeSteamUser extends EventEmitter {
     constructor(options) {
         super();
         this.options = options || {};
         this.steamID = null;
-        this.myFriends = {};
+        this.myFriends = new Proxy({}, {
+            get: (_friends, steamId) => strangers.has(steamId) ? undefined : FakeSteamUser.EFriendRelationship.Friend
+        });
         this.users = {};
         // SteamService attaches 'save'/'read' listeners to storage when S3 is
         // configured. We never persist, so an inert emitter is enough.
@@ -107,6 +112,9 @@ const controlServer = http.createServer(async (req, res) => {
         sendJson(res, 200, { ok: true, ...steamGuardState });
     } else if (req.method === 'GET' && url === '/steam/personas') {
         sendJson(res, 200, { ok: true, requests: personaRequests });
+    } else if (req.method === 'POST' && url === '/steam/strangers') {
+        (await readBody(req)).steamIds.forEach(steamId => strangers.add(String(steamId)));
+        sendJson(res, 200, { ok: true });
     } else if (!activeClient) {
         // All remaining endpoints act on the live client.
         sendJson(res, 503, { ok: false, error: 'no client' });
