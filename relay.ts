@@ -1,16 +1,17 @@
 import { Bot, Message as TelegramMessage } from 'node-telegram-bot-api';
-import { Message as DiscordMessage, PartialMessage } from 'discord.js';
+import { cleanContent, Message as DiscordMessage, PartialMessage } from 'discord.js';
 import ChatLinkDAO, { ChatLink } from './dao/ChatLinkDAO.js';
 import UserDAO from './dao/UserDAO.js';
 import DiscordService, { ReplyTo } from './discord/DiscordService.js';
 import RelayedMessageDAO, { CopyKind, MessageRef, Platform, RelayedMessage } from './dao/RelayedMessageDAO.js';
-import { toDiscordMarkdown } from './discord/markdown.js';
-import { bold, fmt, Formatted, messageText } from './format.js';
+import { asFormatted, bold, fmt, Formatted, join, messageText } from './format.js';
+import RelayMentions from './RelayMentions.js';
 import { discordMedia, downloadTelegramFile, downloadUrl, RelayFile, sendTelegramFile, telegramMedia, TelegramMedia, TelegramSendKind } from './media.js';
 
 const chatLinkDao = new ChatLinkDAO();
 const userDao = new UserDAO();
 const relayedDao = new RelayedMessageDAO();
+const relayMentions = new RelayMentions(userDao);
 
 const TELEGRAM_CAPTION_LIMIT = 1024;
 
@@ -43,7 +44,7 @@ export const relayFromTelegram = async (bot: Bot, msg: TelegramMessage): Promise
         return;
     }
 
-    const content: string = discordContent(msg, media);
+    const content: string = await discordContent(msg, media);
     let files: RelayFile[] = [];
     if (media?.file) {
         try {
@@ -94,17 +95,18 @@ const replyIn = (group: RelayedMessage[], platform: Platform, chat_id: string): 
 };
 
 // The Telegram text or caption as Discord markdown, after any media placeholder.
-const discordContent = (msg: TelegramMessage, media: TelegramMedia | undefined): string => {
+const discordContent = async (msg: TelegramMessage, media: TelegramMedia | undefined): Promise<string> => {
     const formatted: Formatted = msg.text ? { text: msg.text, entities: msg.entities ?? [] } : media?.caption ?? { text: '', entities: [] };
-    return [media?.placeholder, toDiscordMarkdown(formatted)].filter(Boolean).join(' ');
+    return [media?.placeholder, await relayMentions.toDiscord(formatted)].filter(Boolean).join(' ');
 };
 
-// cleanContent has user and channel mentions spelled out as names, for Telegram.
-const discordTexts = (message: DiscordMessage): { telegram: Formatted; discord: string } => {
+// For Telegram, linked users are tagged and other mentions spelled out as names.
+const discordTexts = async (message: DiscordMessage): Promise<{ telegram: Formatted; discord: string }> => {
     const placeholders: string[] = discordMedia(message).placeholders;
-    const text: string = [...placeholders, message.cleanContent].filter(Boolean).join(' ');
+    const content: Formatted = await relayMentions.toTelegram(message.content, text => cleanContent(text, message.channel));
+    const text: Formatted = join([...placeholders, content].filter(part => asFormatted(part).text), ' ');
     return {
-        telegram: text ? fmt`${bold(`${message.author.username}:`)} ${text}` : bold(`${message.author.username}:`),
+        telegram: text.text ? fmt`${bold(`${message.author.username}:`)} ${text}` : bold(`${message.author.username}:`),
         discord: [...placeholders, message.content].filter(Boolean).join(' ')
     };
 };
@@ -153,7 +155,7 @@ export const relayTelegramEdit = async (msg: TelegramMessage): Promise<void> => 
     if (!discord || !relayed) {
         return;
     }
-    await editDiscordCopies(discord, msg.chat.id, relayed.original.author ?? telegramName(msg.from), relayed.copies, discordContent(msg, telegramMedia(msg)), await telegramReply(msg));
+    await editDiscordCopies(discord, msg.chat.id, relayed.original.author ?? telegramName(msg.from), relayed.copies, await discordContent(msg, telegramMedia(msg)), await telegramReply(msg));
 };
 
 export const relayDiscordEdit = async (bot: Bot, edited: DiscordMessage | PartialMessage, link: ChatLink): Promise<void> => {
@@ -163,7 +165,7 @@ export const relayDiscordEdit = async (bot: Bot, edited: DiscordMessage | Partia
         return;
     }
     const message: DiscordMessage = edited.partial ? await edited.fetch() : edited;
-    const texts = discordTexts(message);
+    const texts = await discordTexts(message);
     await Promise.all(relayed.copies.filter(copy => copy.platform === 'telegram').map(copy => {
         const target = { chat_id: Number(copy.chat_id), message_id: Number(copy.message_id) };
         const edit: Promise<unknown> = copy.kind === 'text'
@@ -186,7 +188,7 @@ export const relayFromDiscord = async (bot: Bot, message: DiscordMessage, link: 
         return;
     }
     const author: string = message.author.username;
-    const texts = discordTexts(message);
+    const texts = await discordTexts(message);
 
     const downloads = await Promise.all(media.files.map(async file => {
         try {

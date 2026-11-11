@@ -191,7 +191,14 @@ def inject_message(
     return {**resp.json(), "message_id": message["message_id"]}
 
 
-def inject_edited_message(text: str, chat_id: int, user: Dict[str, Any], message_id: int, reply_to_message_id: Optional[int] = None) -> None:
+def inject_edited_message(
+    text: str,
+    chat_id: int,
+    user: Dict[str, Any],
+    message_id: int,
+    reply_to_message_id: Optional[int] = None,
+    entities: Optional[List[Dict[str, Any]]] = None,
+) -> None:
     """Deliver an edit of a message the user sent earlier; like Telegram, it still says what it replied to."""
     edited: Dict[str, Any] = {
         "message_id": message_id,
@@ -206,6 +213,8 @@ def inject_edited_message(text: str, chat_id: int, user: Dict[str, Any], message
         },
         "text": text,
     }
+    if entities:
+        edited["entities"] = entities
     if reply_to_message_id is not None:
         edited["reply_to_message"] = {
             "message_id": int(reply_to_message_id),

@@ -36,7 +36,8 @@ const wrap = (entity: MessageEntity, inner: string, raw: string): string => {
 
 // Entity offsets are UTF-16 code units, like JS string indexes. Entities nest but never partially
 // overlap, so the outermost entity at each position is rendered with its contents recursed.
-export const toDiscordMarkdown = (formatted: Formatted): string => {
+// `replacements` are written as given in place of their entity, e.g. a mention as `<@id>`.
+export const toDiscordMarkdown = (formatted: Formatted, replacements: Map<MessageEntity, string> = new Map()): string => {
     const entities: MessageEntity[] = [...formatted.entities]
         .sort((a, b) => a.offset - b.offset || b.length - a.length);
 
@@ -48,8 +49,9 @@ export const toDiscordMarkdown = (formatted: Formatted): string => {
             }
             const nested: MessageEntity[] = candidates.filter(e => e !== entity && e.offset >= entity.offset && e.offset + e.length <= entityEnd);
             const raw: string = formatted.text.slice(entity.offset, entityEnd);
+            const rendered: string = replacements.get(entity) ?? wrap(entity, render(entity.offset, entityEnd, nested), raw);
             return {
-                out: out + escapeMarkdown(formatted.text.slice(pos, entity.offset)) + wrap(entity, render(entity.offset, entityEnd, nested), raw),
+                out: out + escapeMarkdown(formatted.text.slice(pos, entity.offset)) + rendered,
                 pos: entityEnd
             };
         }, { out: '', pos: start });

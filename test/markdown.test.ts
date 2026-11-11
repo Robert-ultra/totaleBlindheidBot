@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import { MessageEntity } from 'node-telegram-bot-api';
 import assert from 'node:assert/strict';
 import { splitMessage, toDiscordMarkdown } from '../discord/markdown.js';
 import { bold, dateTime, fmt, link } from '../format.js';
@@ -42,4 +43,17 @@ test('long content splits on line breaks under the limit', () => {
     assert.deepEqual(splitMessage('abc\ndef\nghi', 5), ['abc', 'def', 'ghi']);
     assert.deepEqual(splitMessage('abcdefghij', 4), ['abcd', 'efgh', 'ij']);
     assert.deepEqual(splitMessage('short'), ['short']);
+});
+
+test('a replaced entity is written as given, unescaped', () => {
+    const text = 'hi @a_b and @c_d';
+    const replaced: MessageEntity = { type: 'mention', offset: 3, length: 4 };
+    const kept: MessageEntity = { type: 'mention', offset: 12, length: 4 };
+    assert.equal(toDiscordMarkdown({ text, entities: [replaced, kept] }, new Map([[replaced, '<@1>']])), 'hi <@1> and @c\\_d');
+});
+
+test('a replaced entity inside formatting keeps the formatting', () => {
+    const replaced: MessageEntity = { type: 'text_mention', offset: 3, length: 3, user: { id: 1, is_bot: false, first_name: 'Ann' } };
+    const formatted = { text: 'gg Ann', entities: [{ type: 'bold', offset: 0, length: 6 } as MessageEntity, replaced] };
+    assert.equal(toDiscordMarkdown(formatted, new Map([[replaced, '<@1>']])), '**gg <@1>**');
 });
