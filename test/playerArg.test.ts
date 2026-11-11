@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { matchPlayerArgument } from '../command/playerArg.js';
+import { matchPlayerArgument, mismatchReply } from '../command/playerArg.js';
 import { ChatPlayer } from '../dao/GameHistoryDAO.js';
 
 const roster: ChatPlayer[] = [
@@ -79,4 +79,12 @@ test('discord:<username> matches Discord usernames only', () => {
 
 test('@username still matches Telegram usernames only', () => {
     assert.deepEqual(matchPlayerArgument(withDiscord, '@kit_cs'), { kind: 'player', user_id: 7, name: 'Lee' });
+});
+
+test('a mismatch is explained, a resolved argument is not', () => {
+    assert.equal(mismatchReply({ kind: 'none', needle: 'x' }), 'I don\'t have any recorded games for "x" in this chat.');
+    assert.equal(mismatchReply({ kind: 'ambiguous', needle: 'Bob', names: ['Bob', 'Bob (@bobby)'] }),
+        '"Bob" matches multiple players: Bob, Bob (@bobby). Please be more specific.');
+    assert.equal(mismatchReply({ kind: 'self' }), null);
+    assert.equal(mismatchReply({ kind: 'player', user_id: 1, name: 'Alice' }), null);
 });
