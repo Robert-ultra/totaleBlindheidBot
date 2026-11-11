@@ -24,6 +24,19 @@ class ChatDAO {
             { chat_id, steam_updates: newSettings.steam_updates == null ? null : (newSettings.steam_updates ? 1 : 0) }
         ).then(() => undefined);
     }
+
+    async isAutoCancel(chat_id: number): Promise<boolean> {
+        const rows = await query<RowDataPacket[]>('SELECT auto_cancel FROM chat_settings WHERE chat_id = :chat_id', { chat_id });
+        return !!rows[0]?.auto_cancel;
+    }
+
+    setAutoCancel(chat_id: number, enabled: boolean): Promise<void> {
+        return query<ResultSetHeader>(
+            'INSERT INTO chat_settings (chat_id, auto_cancel) VALUES (:chat_id, :auto_cancel) ' +
+            'ON DUPLICATE KEY UPDATE auto_cancel = VALUES(auto_cancel)',
+            { chat_id, auto_cancel: enabled ? 1 : 0 }
+        ).then(() => undefined);
+    }
 }
 
 export default ChatDAO;

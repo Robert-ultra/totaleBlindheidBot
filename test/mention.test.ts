@@ -54,7 +54,8 @@ test('resolve matches RSVP entries to rotation players by user id or username', 
     };
     assert.deepEqual(resolve(rotation, entries), {
         groups: { yes: ['Alice'], maybe: ['Eve'], no: ['@​carol'] },
-        tagged: ['[Alice](user:1)', 'Dave', '[Eve](user:4)']
+        tagged: ['[Alice](user:1)', 'Dave', '[Eve](user:4)'],
+        pending: ['Dave', '[Eve](user:4)']
     });
 });
 

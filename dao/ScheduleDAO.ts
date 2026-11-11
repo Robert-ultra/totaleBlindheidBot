@@ -5,13 +5,14 @@ export interface ScheduledRollcall {
     time: Date;
     rsvp_id?: number;
     initiator_id?: number;
+    reminded_at?: Date;
 }
 
 export type ScheduledRollcalls = Record<string, ScheduledRollcall>;
 
 class ScheduleDAO {
     async getScheduledRollcalls(): Promise<ScheduledRollcalls> {
-        const rows = await query<RowDataPacket[]>('SELECT chat_id, trigger_at, rsvp_list_id, initiator_id FROM rollcall_schedule');
+        const rows = await query<RowDataPacket[]>('SELECT chat_id, trigger_at, rsvp_list_id, initiator_id, reminded_at FROM rollcall_schedule');
         const result: ScheduledRollcalls = {};
         for (const row of rows) {
             const schedule: ScheduledRollcall = { time: row.trigger_at };
@@ -20,6 +21,9 @@ class ScheduleDAO {
             }
             if (row.initiator_id != null) {
                 schedule.initiator_id = Number(row.initiator_id);
+            }
+            if (row.reminded_at != null) {
+                schedule.reminded_at = row.reminded_at;
             }
             result[String(row.chat_id)] = schedule;
         }
@@ -36,6 +40,10 @@ class ScheduleDAO {
                 { chat_id, trigger_at: time, rsvp_list_id: rsvp_id ?? null, initiator_id: initiator_id ?? null }
             );
         });
+    }
+
+    markReminded(chat_id: number): Promise<void> {
+        return query<ResultSetHeader>('UPDATE rollcall_schedule SET reminded_at = :now WHERE chat_id = :chat_id', { chat_id, now: new Date() }).then(() => undefined);
     }
 
     removeScheduledRollcall(chat_id: number): Promise<void> {

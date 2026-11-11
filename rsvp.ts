@@ -6,6 +6,8 @@ import { displayName, parseMention, userMention } from './mention.js';
 
 export type RsvpKeyboardKind = 'schedule' | 'rollcall';
 
+export const LOBBY_SIZE: number = Number(process.env.LOBBY_SIZE) || 5;
+
 const LABELS: Record<RsvpKeyboardKind, Record<Rsvp, string>> = {
     schedule: { yes: "I'm in", maybe: 'Maybe', no: 'No' },
     rollcall: { yes: 'Joining', maybe: 'Maybe/Later', no: 'No' }
@@ -58,6 +60,7 @@ interface ResolvedPerson {
 export interface RsvpGroups {
     groups: Record<Rsvp, string[]>; // display names per rsvp value (only those who chose)
     tagged: string[];               // rotation mention strings whose rsvp != 'no'
+    pending: string[];              // mention strings of maybes and rotation players yet to answer
 }
 
 // Combine the live rotation roster with the explicit entries on the RSVP list.
@@ -95,6 +98,7 @@ const resolve = (rotation: string[], entries: Record<string, RsvpEntry>): RsvpGr
 
     const groups: Record<Rsvp, string[]> = { yes: [], maybe: [], no: [] };
     const tagged: string[] = [];
+    const pending: string[] = [];
     people.forEach(person => {
         // Only people who have actually made a selection appear in the lists.
         if (person.rsvp) {
@@ -104,9 +108,12 @@ const resolve = (rotation: string[], entries: Record<string, RsvpEntry>): RsvpGr
         if (person.mention && person.rsvp !== 'no') {
             tagged.push(person.mention);
         }
+        if (person.mention && (person.rsvp === undefined || person.rsvp === 'maybe')) {
+            pending.push(person.mention);
+        }
     });
 
-    return { groups, tagged };
+    return { groups, tagged, pending };
 };
 
 // Build the 🙋‍♂️/🤷‍♂️/🙅‍♂️ block, omitting any group that has no members.

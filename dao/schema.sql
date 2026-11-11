@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS chat_settings (
     chat_id       BIGINT     NOT NULL,
     steam_updates TINYINT(1) NULL,
     github_notify TINYINT(1) NULL,
+    auto_cancel   TINYINT(1) NULL,
     PRIMARY KEY (chat_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -122,6 +123,7 @@ CREATE TABLE IF NOT EXISTS rollcall_schedule (
     trigger_at   DATETIME(3) NOT NULL,
     rsvp_list_id BIGINT      NULL,
     initiator_id BIGINT      NULL,
+    reminded_at  DATETIME(3) NULL,
     PRIMARY KEY (id),
     KEY idx_rollcall_schedule_chat (chat_id),
     CONSTRAINT fk_rollcall_schedule_initiator FOREIGN KEY (initiator_id)

@@ -28,6 +28,7 @@ import hiHandler from './command/hi.js';
 import rollcallHandler from './command/rollcall.js';
 import scheduleHandler from './command/schedule.js';
 import cancelHandler from './command/cancel.js';
+import autoCancelHandler from './command/auto_cancel.js';
 import timezoneHandler from './command/timezone.js';
 import wingmanHandler from './command/wingman.js';
 import steamUserIdHandler, { handleSteamIdCallback, handleSteamIdReply, CALLBACK_PREFIX as STEAM_ID_CALLBACK_PREFIX } from './command/steam_user_id.js';
@@ -226,6 +227,9 @@ router.route('schedule', scheduleHandler, {
 router.route('cancel', cancelHandler, {
     helpText: 'Cancel a scheduled rollcall.',
     discord: {}
+});
+router.route('auto_cancel', autoCancelHandler, {
+    helpText: 'Admin: call off a scheduled rollcall that isn\'t full by reminder time (on/off).'
 });
 router.route('timezone', timezoneHandler, {
     helpText: 'Set or view your timezone for rollcall scheduling.',
