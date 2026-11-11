@@ -28,6 +28,7 @@ import {
 import ChatLinkDAO, { ChatLink } from '../dao/ChatLinkDAO.js';
 import { DiscordIdentity } from '../dao/UserDAO.js';
 import { splitMessage, toDiscordMarkdown } from './markdown.js';
+import GuildMentions, { MemberLookup } from './GuildMentions.js';
 import { Rsvp } from '../dao/RsvpDAO.js';
 import { RsvpKeyboardKind, rsvpLabels } from '../rsvp.js';
 import { RelayFile } from '../media.js';
@@ -92,13 +93,14 @@ export const rsvpComponents = (kind: RsvpKeyboardKind): ActionRowBuilder<ButtonB
     )
 ];
 
-class DiscordService {
+class DiscordService implements MemberLookup {
     public static instance: DiscordService | null = null;
 
     private client: Client;
     private restOptions: Partial<RESTOptions>;
     private chatLinkDao: ChatLinkDAO = new ChatLinkDAO();
     private webhookClients: Map<string, WebhookClient> = new Map();
+    private guildMentions: GuildMentions = new GuildMentions(this);
     private messageHandlers: DiscordMessageHandler[] = [];
     private editHandlers: DiscordEditHandler[] = [];
     private deleteHandlers: DiscordDeleteHandler[] = [];
@@ -316,6 +318,15 @@ class DiscordService {
         };
     }
 
+    async isMember(guild_id: string, user_id: string): Promise<boolean> {
+        const guild = this.client.guilds.cache.get(guild_id) ?? await this.client.guilds.fetch(guild_id).catch(() => undefined);
+        return guild !== undefined && await guild.members.fetch(user_id).then(() => true, () => false);
+    }
+
+    displayName(user_id: string): Promise<string | undefined> {
+        return this.client.users.fetch(user_id).then(user => user.displayName, () => undefined);
+    }
+
     // members.search matches on prefix, so filter down to the exact username.
     async findMember(guild_id: string, username: string): Promise<DiscordIdentity | undefined> {
         const guild = this.client.guilds.cache.get(guild_id) ?? await this.client.guilds.fetch(guild_id).catch(() => undefined);
@@ -384,7 +395,8 @@ class DiscordService {
     }
 
     // Returns the (last) message sent and how, so it can be edited later.
-    async relay(link: ChatLink, author: string, content: string, files: RelayFile[] = [], reply?: ReplyTo): Promise<{ message_id: string; kind: CopyKind }> {
+    async relay(link: ChatLink, author: string, relayed: string, files: RelayFile[] = [], reply?: ReplyTo): Promise<{ message_id: string; kind: CopyKind }> {
+        const content: string = await this.guildMentions.forGuild(relayed, link.discord_guild_id);
         const attachments = files.map(file => ({ attachment: file.data, name: file.name }));
         if (link.webhook_id && link.webhook_token) {
             const webhook = this.webhookClient({ id: link.webhook_id, token: link.webhook_token });
@@ -410,7 +422,8 @@ class DiscordService {
         await channel?.messages.delete(message_id);
     }
 
-    async editRelayed(link: ChatLink, message_id: string, kind: CopyKind, author: string, content: string, reply?: ReplyTo): Promise<void> {
+    async editRelayed(link: ChatLink, message_id: string, kind: CopyKind, author: string, relayed: string, reply?: ReplyTo): Promise<void> {
+        const content: string = await this.guildMentions.forGuild(relayed, link.discord_guild_id);
         if (kind === 'webhook' && link.webhook_id && link.webhook_token) {
             await this.webhookClient({ id: link.webhook_id, token: link.webhook_token }).editMessage(message_id, { content: splitMessage(replyLine(link, reply) + content)[0] });
         } else if (kind === 'bot') {

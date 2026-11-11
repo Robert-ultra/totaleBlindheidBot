@@ -333,6 +333,27 @@ def _member_object(guild: Dict[str, Any], user: Dict[str, Any]) -> Dict[str, Any
     }
 
 
+@app.route("/api/v10/guilds/<guild_id>/members/<user_id>", methods=["GET"])
+def get_member(guild_id: str, user_id: str) -> Response:
+    with _lock:
+        guild = _guilds.get(guild_id)
+        if not guild:
+            return _error(404, 10004, "Unknown Guild")
+        user = guild["members"].get(user_id)
+        if not user:
+            return _error(404, 10007, "Unknown Member")
+        return jsonify(_member_object(guild, user))
+
+
+@app.route("/api/v10/users/<user_id>", methods=["GET"])
+def get_user(user_id: str) -> Response:
+    with _lock:
+        user = next((g["members"][user_id] for g in _guilds.values() if user_id in g["members"]), None)
+        if not user:
+            return _error(404, 10013, "Unknown User")
+        return jsonify({"discriminator": "0", "avatar": None, "bot": False, "global_name": None, **user})
+
+
 @app.route("/api/v10/guilds/<guild_id>/members/search", methods=["GET"])
 def search_members(guild_id: str) -> Response:
     """Members whose username or display name starts with the query, like Discord's search."""
