@@ -1,5 +1,5 @@
 import * as chrono from 'chrono-node';
-import { DateTime } from 'luxon';
+import { DateTime, Info } from 'luxon';
 import tzSoft from 'timezone-soft';
 
 // Minimal shape of a timezone-soft result; @types aren't published for it.
@@ -158,4 +158,51 @@ const parseTime = (input: string, now: Date = new Date(), timezone: string = 'UT
     return finalDate.toJSDate();
 };
 
-export { parseTime, normaliseTimezone };
+const WEEKDAYS: string[] = Info.weekdays('long', { locale: 'en' });
+const RECURRENCE = /^every\s+([a-z]{3,})\s+(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/i;
+
+// A weekly slot: an ISO weekday (1 is Monday) and a wall-clock time in a timezone.
+class Recurrence {
+    constructor(
+        readonly weekday: number,
+        readonly hour: number,
+        readonly minute: number,
+        readonly timezone: string
+    ) {}
+
+    static fromJSON(json: string): Recurrence {
+        const { weekday, hour, minute, timezone } = JSON.parse(json);
+        return new Recurrence(weekday, hour, minute, timezone);
+    }
+
+    next(after: Date): Date {
+        const local: DateTime = DateTime.fromJSDate(after).setZone(this.timezone);
+        const candidate: DateTime = local
+            .plus({ days: (this.weekday - local.weekday + 7) % 7 })
+            .set({ hour: this.hour, minute: this.minute, second: 0, millisecond: 0 });
+        return (candidate > local ? candidate : candidate.plus({ weeks: 1 })).toJSDate();
+    }
+
+    describe(): string {
+        return `every ${WEEKDAYS[this.weekday - 1]} at ${String(this.hour).padStart(2, '0')}:${String(this.minute).padStart(2, '0')}`;
+    }
+}
+
+// "every thursday 21:00", "every sat at 9pm".
+const parseRecurrence = (input: string, timezone: string = 'UTC'): Recurrence | null => {
+    const match: RegExpMatchArray | null = input.trim().match(RECURRENCE);
+    if (!match) {
+        return null;
+    }
+    const [, day, hourText, minuteText, meridiem] = match;
+    const weekday: number = WEEKDAYS.findIndex(name => name.toLowerCase().startsWith(day.toLowerCase())) + 1;
+    const clock: number = Number(hourText);
+    const minute: number = Number(minuteText ?? 0);
+    const hour: number = meridiem ? clock % 12 + (meridiem.toLowerCase() === 'pm' ? 12 : 0) : clock;
+    if (weekday === 0 || minute > 59 || (meridiem ? clock < 1 || clock > 12 : clock > 23)) {
+        return null;
+    }
+    return new Recurrence(weekday, hour, minute, timezone);
+};
+
+export { parseTime, normaliseTimezone, parseRecurrence, Recurrence };

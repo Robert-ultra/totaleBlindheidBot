@@ -223,6 +223,12 @@ const migrateRsvpMessagePlatform = async (conn: PoolConnection): Promise<void> =
     }
 };
 
+const migrateScheduleRecurrence = async (conn: PoolConnection): Promise<void> => {
+    if (await tableExists(conn, 'rollcall_schedule')) {
+        await conn.query('ALTER TABLE rollcall_schedule ADD COLUMN IF NOT EXISTS recurrence VARCHAR(255) NULL AFTER initiator_id');
+    }
+};
+
 // Create any missing tables. Idempotent (every statement is CREATE TABLE IF NOT EXISTS, plus
 // guarded one-off migrations for shape changes the CREATE statements can't apply in place).
 export const ensureSchema = async (): Promise<void> => {
@@ -236,6 +242,7 @@ export const ensureSchema = async (): Promise<void> => {
         await migrateDiscordNameColumn(conn);
         await migrateRsvpMessagePlatform(conn);
         await migratePresencePartyColumn(conn);
+        await migrateScheduleRecurrence(conn);
         for (const statement of splitStatements(ddl)) {
             await conn.query(statement);
         }

@@ -122,6 +122,7 @@ CREATE TABLE IF NOT EXISTS rollcall_schedule (
     trigger_at   DATETIME(3) NOT NULL,
     rsvp_list_id BIGINT      NULL,
     initiator_id BIGINT      NULL,
+    recurrence   VARCHAR(255) NULL,
     PRIMARY KEY (id),
     KEY idx_rollcall_schedule_chat (chat_id),
     CONSTRAINT fk_rollcall_schedule_initiator FOREIGN KEY (initiator_id)

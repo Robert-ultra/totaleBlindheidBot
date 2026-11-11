@@ -1,17 +1,19 @@
 import { ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 import { query, withTransaction } from './Database.js';
+import { Recurrence } from '../timeUtils.js';
 
 export interface ScheduledRollcall {
     time: Date;
     rsvp_id?: number;
     initiator_id?: number;
+    recurrence?: Recurrence;
 }
 
 export type ScheduledRollcalls = Record<string, ScheduledRollcall>;
 
 class ScheduleDAO {
     async getScheduledRollcalls(): Promise<ScheduledRollcalls> {
-        const rows = await query<RowDataPacket[]>('SELECT chat_id, trigger_at, rsvp_list_id, initiator_id FROM rollcall_schedule');
+        const rows = await query<RowDataPacket[]>('SELECT chat_id, trigger_at, rsvp_list_id, initiator_id, recurrence FROM rollcall_schedule');
         const result: ScheduledRollcalls = {};
         for (const row of rows) {
             const schedule: ScheduledRollcall = { time: row.trigger_at };
@@ -21,21 +23,32 @@ class ScheduleDAO {
             if (row.initiator_id != null) {
                 schedule.initiator_id = Number(row.initiator_id);
             }
+            if (row.recurrence != null) {
+                schedule.recurrence = Recurrence.fromJSON(row.recurrence);
+            }
             result[String(row.chat_id)] = schedule;
         }
         return result;
     }
 
-    setScheduledRollcall(chat_id: number, time: Date, rsvp_id?: number, initiator_id?: number): Promise<void> {
+    setScheduledRollcall(chat_id: number, time: Date, rsvp_id?: number, initiator_id?: number, recurrence?: Recurrence): Promise<void> {
         return withTransaction(async conn => {
             // Replace any existing schedule for this chat (keeps one-per-chat behaviour).
             await conn.query('DELETE FROM rollcall_schedule WHERE chat_id = :chat_id', { chat_id });
             await conn.query(
-                'INSERT INTO rollcall_schedule (chat_id, trigger_at, rsvp_list_id, initiator_id) ' +
-                'VALUES (:chat_id, :trigger_at, :rsvp_list_id, :initiator_id)',
-                { chat_id, trigger_at: time, rsvp_list_id: rsvp_id ?? null, initiator_id: initiator_id ?? null }
+                'INSERT INTO rollcall_schedule (chat_id, trigger_at, rsvp_list_id, initiator_id, recurrence) ' +
+                'VALUES (:chat_id, :trigger_at, :rsvp_list_id, :initiator_id, :recurrence)',
+                { chat_id, trigger_at: time, rsvp_list_id: rsvp_id ?? null, initiator_id: initiator_id ?? null, recurrence: recurrence ? JSON.stringify(recurrence) : null }
             );
         });
+    }
+
+    // Unlike setScheduledRollcall, leaves a chat whose schedule was cancelled meanwhile unscheduled.
+    updateScheduledRollcall(chat_id: number, time: Date, rsvp_id?: number): Promise<void> {
+        return query<ResultSetHeader>(
+            'UPDATE rollcall_schedule SET trigger_at = :trigger_at, rsvp_list_id = :rsvp_list_id WHERE chat_id = :chat_id',
+            { chat_id, trigger_at: time, rsvp_list_id: rsvp_id ?? null }
+        ).then(() => undefined);
     }
 
     removeScheduledRollcall(chat_id: number): Promise<void> {

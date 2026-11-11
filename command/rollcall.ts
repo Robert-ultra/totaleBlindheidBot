@@ -10,7 +10,7 @@ import { trackTaggedMessage } from '../taggedMessages.js';
 import { User } from '../dao/UserDAO.js';
 import { broadcast, Broadcast, Target } from '../messenger.js';
 import { renderDiscordMessage, withDiscordTags } from '../discord/render.js';
-import { parseTime } from '../timeUtils.js';
+import { parseRecurrence, parseTime } from '../timeUtils.js';
 import scheduleHandler from './schedule.js';
 
 const rollcallPlayerDao = new RollcallPlayerDAO();
@@ -74,7 +74,7 @@ const executeRollcall = (bot: Bot, target: Target, opts: ExecuteRollcallOptions 
 
 export default (bot: Bot, cmd: Command): Promise<unknown> => {
     // Whether it parses doesn't depend on the timezone, so the default is fine here.
-    if (cmd.command.argument && parseTime(cmd.command.argument)) {
+    if (cmd.command.argument && (parseTime(cmd.command.argument) || parseRecurrence(cmd.command.argument))) {
         return scheduleHandler(bot, cmd);
     }
     return executeRollcall(bot, cmd, { initiator: cmd.user })

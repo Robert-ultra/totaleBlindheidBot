@@ -4,6 +4,7 @@ import { Bot } from 'node-telegram-bot-api';
 import { Command } from '../MessageRouter.js';
 import UserDAO from '../dao/UserDAO.js';
 import RollcallPlayerDAO from '../dao/RollcallPlayerDAO.js';
+import ScheduleDAO from '../dao/ScheduleDAO.js';
 import { bold, Part } from '../format.js';
 import rollcall from '../command/rollcall.js';
 
@@ -40,4 +41,13 @@ test('/rollcall followed by a time is handled as /schedule', async () => {
     assert.deepEqual(await run('1 minute'), { replies: ['Rollcall must be scheduled at least 2 minutes in advance.'], scheduled: true });
     mock.restoreAll();
     assert.deepEqual(await run('13 hours'), { replies: ['Rollcall cannot be scheduled more than 12 hours in advance.'], scheduled: true });
+});
+
+test('/rollcall followed by a weekly time is handled as /schedule', async () => {
+    mock.method(ScheduleDAO.prototype, 'getScheduledRollcalls', async () => {
+        throw new Error('scheduled');
+    });
+    const { replies, scheduled } = await run('every thursday 21:00');
+    assert.equal(scheduled, true);
+    assert.match(String(replies[0]), /^Error: scheduled/);
 });
