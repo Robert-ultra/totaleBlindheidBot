@@ -579,8 +579,8 @@ def discord_webhooks() -> List[Dict[str, Any]]:
     return resp.json()["webhooks"]
 
 
-def discord_run_command(channel_id: str, user: Dict[str, Any], name: str, argument: Optional[Dict[str, str]] = None, manages_server: bool = False) -> Dict[str, Any]:
-    body: Dict[str, Any] = {"channel_id": channel_id, "user": user, "name": name, "manages_server": manages_server}
+def discord_run_command(channel_id: str, user: Dict[str, Any], name: str, argument: Optional[Dict[str, str]] = None, manages_server: bool = False, options: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
+    body: Dict[str, Any] = {"channel_id": channel_id, "user": user, "name": name, "manages_server": manages_server, "options": options or []}
     if argument:
         body["argument"] = argument
     resp = requests.post(f"{DISCORD_MOCK_URL}/test/interactions/command", json=body, timeout=5)

@@ -1,4 +1,4 @@
-import { ExtendedMessage } from '../MessageRouter.js';
+import { Command } from '../MessageRouter.js';
 import ChatLinkDAO from '../dao/ChatLinkDAO.js';
 import UserDAO, { DiscordIdentity, User } from '../dao/UserDAO.js';
 import DiscordService from './DiscordService.js';
@@ -27,8 +27,8 @@ export const resolveDiscordUser = async (telegram_chat_id: number, username: str
     return userDao.getUserByDiscordUsername(username);
 };
 
-export const resolveTelegramUser = async (msg: ExtendedMessage, argument: string | undefined): Promise<User | undefined> => {
-    const mention = msg.entities?.find(e => e.type === 'text_mention' && e.user);
+export const resolveTelegramUser = async (cmd: Command, argument: string | undefined): Promise<User | undefined> => {
+    const mention = cmd.telegram?.entities?.find(e => e.type === 'text_mention' && e.user);
     if (mention?.user) {
         return userDao.fromTelegram(mention.user);
     }

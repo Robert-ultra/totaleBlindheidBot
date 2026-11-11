@@ -8,12 +8,16 @@ import { parsePlayerMentions } from '../command/admin/parsePlayerMentions.js';
 const bob: User = { id: 5, telegram_id: 55, name: 'Bob', username: 'bobby' };
 const kit: User = { id: 6, discord_id: '66', discord_username: 'kit_cs' };
 
-const command = (argument: string, entities: MessageEntity[] = []): ExtendedMessage => ({
-    chat: { id: -7 },
-    text: `/rollcall_add_player ${argument}`,
-    entities,
-    command: { name: 'rollcall_add_player', argument, argumentTokens: argument.split(' ') }
-} as unknown as ExtendedMessage);
+const command = (argument: string, entities: MessageEntity[] = []): ExtendedMessage => {
+    const telegram = { chat: { id: -7 }, text: `/rollcall_add_player ${argument}`, entities };
+    return {
+        ...telegram,
+        platform: 'telegram',
+        chat_id: -7,
+        telegram,
+        command: { name: 'rollcall_add_player', argument, argumentTokens: argument.split(' '), options: {} }
+    } as unknown as ExtendedMessage;
+};
 
 const knownUsers = (): void => {
     mock.method(UserDAO.prototype, 'getUserIdByUsername', async (username: string) => username === 'bobby' ? bob.id : undefined);

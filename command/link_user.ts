@@ -1,6 +1,6 @@
 import { Bot } from 'node-telegram-bot-api';
-import { ExtendedMessage } from '../MessageRouter.js';
-import { isChatAdmin } from '../admin.js';
+import { Command } from '../MessageRouter.js';
+import CommandPermissions from '../CommandPermissions.js';
 import UserDAO, { User, userDisplayName } from '../dao/UserDAO.js';
 import DiscordService from '../discord/DiscordService.js';
 import { notFoundMessage, parseDiscordRef, resolveDiscordUser, resolveTelegramUser } from '../discord/users.js';
@@ -11,21 +11,26 @@ const userDao = new UserDAO();
 
 export const ADMIN_ONLY = 'Only a group admin can link or unlink users.';
 export const USAGE = 'Usage: /link_user <Telegram username> <Discord username>';
+const DISCORD_USAGE = 'Name the Telegram user with the user option and the Discord user with the discord option.';
 
-export default async (bot: Bot, msg: ExtendedMessage): Promise<void> => {
+const references = (cmd: Command): string[] => cmd.platform === 'discord'
+    ? [cmd.command.options.user, cmd.command.options.discord].filter((reference): reference is string => reference !== undefined)
+    : cmd.command.argumentTokens;
+
+export default async (bot: Bot, msg: Command): Promise<void> => {
     try {
         if (!DiscordService.instance) {
             await msg.reply(NOT_CONFIGURED);
             return;
-        } else if (!(await isChatAdmin(bot, msg.chat.id, msg.from?.id))) {
+        } else if (!(await new CommandPermissions(bot).isAdmin(msg, 'server'))) {
             await msg.reply(ADMIN_ONLY);
             return;
         }
 
-        const [first, second] = msg.command.argumentTokens;
+        const [first, second] = references(msg);
         const discord_username: string = parseDiscordRef(second ?? '') ?? (second ?? '').replace(/^@/, '').toLowerCase();
-        if (msg.command.argumentTokens.length !== 2 || discord_username === '') {
-            await msg.reply(USAGE);
+        if (references(msg).length !== 2 || discord_username === '') {
+            await msg.reply(msg.platform === 'discord' ? DISCORD_USAGE : USAGE);
             return;
         }
 
@@ -41,7 +46,7 @@ export default async (bot: Bot, msg: ExtendedMessage): Promise<void> => {
             return;
         }
 
-        const discordUser: User | undefined = await resolveDiscordUser(msg.chat.id, discord_username);
+        const discordUser: User | undefined = await resolveDiscordUser(msg.chat_id, discord_username);
         if (!discordUser) {
             await msg.reply(notFoundMessage(discord_username));
             return;

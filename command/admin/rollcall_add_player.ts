@@ -1,28 +1,29 @@
 import { Bot } from 'node-telegram-bot-api';
-import { ExtendedMessage } from '../../MessageRouter.js';
+import { Command, ExtendedMessage } from '../../MessageRouter.js';
 import { formatError } from '../../utils.js';
 import RollcallPlayerDAO from '../../dao/RollcallPlayerDAO.js';
-import { parsePlayerMentions } from './parsePlayerMentions.js';
+import { parsePlayerMentions, playerReferences } from './parsePlayerMentions.js';
 import RollcallPlayerPicker from './RollcallPlayerPicker.js';
 import { parseMention } from '../../mention.js';
 
 const dao = new RollcallPlayerDAO();
 const picker = new RollcallPlayerPicker();
 
-export default (bot: Bot, msg: ExtendedMessage): void => {
-    if ((msg.command?.argumentTokens || []).length === 0) {
-        picker.askWhoToAdd(bot, msg).catch((err: Error) => msg.reply(formatError(err)));
-        return;
+export const NAME_A_PLAYER = 'Name a player with the user or discord option.';
+
+export default (bot: Bot, cmd: Command): Promise<unknown> => {
+    if (playerReferences(cmd).length === 0) {
+        return (cmd.platform === 'telegram' ? picker.askWhoToAdd(bot, cmd as ExtendedMessage) : cmd.reply(NAME_A_PLAYER))
+            .catch((err: Error) => cmd.reply(formatError(err)));
     }
 
-    parsePlayerMentions(msg)
+    return parsePlayerMentions(cmd)
         .then(parsed => {
             if ('error' in parsed) {
-                msg.reply(parsed.error);
-                return;
+                return cmd.reply(parsed.error);
             }
             const { players } = parsed;
-            return dao.getRollcallPlayerUsernames(msg.chat.id)
+            return dao.getRollcallPlayerUsernames(cmd.chat_id)
                 .then((existingPlayers: string[]) => {
                     const existingIds: (number | undefined)[] = existingPlayers.map(existing => parseMention(existing).id);
                     players.forEach(player => {
@@ -32,8 +33,8 @@ export default (bot: Bot, msg: ExtendedMessage): void => {
                         }
                     });
                 })
-                .then(() => Promise.all(players.map(player => dao.addRollcallPlayer(msg.chat.id, player))))
-                .then(() => msg.reply(`Added ${players.length} players to rollcall.`));
+                .then(() => Promise.all(players.map(player => dao.addRollcallPlayer(cmd.chat_id, player))))
+                .then(() => cmd.reply(`Added ${players.length} players to rollcall.`));
         })
-        .catch((err: Error) => msg.reply(formatError(err)));
+        .catch((err: Error) => cmd.reply(formatError(err)));
 }

@@ -1,35 +1,52 @@
 import { Bot } from 'node-telegram-bot-api';
-import { ExtendedMessage } from '../MessageRouter.js';
-import { isChatAdmin } from '../admin.js';
+import { Command } from '../MessageRouter.js';
+import CommandPermissions from '../CommandPermissions.js';
 import UserDAO, { User, userDisplayName } from '../dao/UserDAO.js';
-import { resolveTelegramUser } from '../discord/users.js';
+import { parseDiscordRef, resolveDiscordUser, resolveTelegramUser } from '../discord/users.js';
 import { formatError } from '../utils.js';
 import { ADMIN_ONLY } from './link_user.js';
 
 const userDao = new UserDAO();
 
-export default async (bot: Bot, msg: ExtendedMessage): Promise<void> => {
+// On Discord the user option names the Telegram user, the discord option the Discord one.
+const target = (cmd: Command): { reference: string; find: () => Promise<User | undefined> } | undefined => {
+    const { user, discord } = cmd.command.options;
+    if (cmd.platform === 'telegram') {
+        const [first] = cmd.command.argumentTokens;
+        return cmd.command.argumentTokens.length === 1 ? { reference: first, find: () => resolveTelegramUser(cmd, first) } : undefined;
+    } else if (user !== undefined) {
+        return { reference: user, find: () => resolveTelegramUser(cmd, user) };
+    } else if (discord !== undefined) {
+        return { reference: discord, find: () => resolveDiscordUser(cmd.chat_id, parseDiscordRef(discord) ?? discord.replace(/^@/, '').toLowerCase()) };
+    }
+    return undefined;
+};
+
+export default async (bot: Bot, cmd: Command): Promise<void> => {
     try {
-        if (!(await isChatAdmin(bot, msg.chat.id, msg.from?.id))) {
-            await msg.reply(ADMIN_ONLY);
+        if (!(await new CommandPermissions(bot).isAdmin(cmd, 'server'))) {
+            await cmd.reply(ADMIN_ONLY);
             return;
         }
-        const [first] = msg.command.argumentTokens;
-        if (msg.command.argumentTokens.length !== 1) {
-            await msg.reply('Usage: /unlink_user <Telegram username>');
+        const named = target(cmd);
+        if (!named) {
+            await cmd.reply(cmd.platform === 'discord' ? 'Name a user with the user or discord option.' : 'Usage: /unlink_user <Telegram username>');
             return;
         }
-        const telegramUser: User | undefined = await resolveTelegramUser(msg, first);
+        const telegramUser: User | undefined = await named.find();
         if (!telegramUser) {
-            await msg.reply(`I don't know ${first}.`);
+            await cmd.reply(`I don't know ${named.reference}.`);
+            return;
+        } else if (telegramUser.telegram_id === undefined) {
+            await cmd.reply(`${userDisplayName(telegramUser)} is not linked to a Telegram user.`);
             return;
         } else if (!telegramUser.discord_id) {
-            await msg.reply(`${userDisplayName(telegramUser)} is not linked to a Discord user.`);
+            await cmd.reply(`${userDisplayName(telegramUser)} is not linked to a Discord user.`);
             return;
         }
         await userDao.unlinkDiscord(telegramUser.id);
-        await msg.reply(`Unlinked ${userDisplayName(telegramUser)} from Discord user ${telegramUser.discord_username}.`);
+        await cmd.reply(`Unlinked ${userDisplayName(telegramUser)} from Discord user ${telegramUser.discord_username}.`);
     } catch (err: any) {
-        await msg.reply(formatError(err));
+        await cmd.reply(formatError(err));
     }
 };

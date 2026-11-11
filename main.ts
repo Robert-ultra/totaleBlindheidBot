@@ -224,6 +224,8 @@ ensureSchema()
     });
 
 const router: MessageRouter = new MessageRouter(bot);
+const TELEGRAM_USER_OPTION = { name: 'user', description: 'A Telegram username.' };
+const DISCORD_USER_OPTION = { name: 'discord', description: 'A Discord username.' };
 
 router.route('hi', hiHandler, {
     helpText: 'Craving that small talk, are you?',
@@ -261,10 +263,12 @@ router.route('unlink_chat', unlinkChatHandler, {
     discord: { argument: { name: 'channel', description: 'The id of a linked channel of this server. Leave empty for this channel.' }, admin: 'server' }
 });
 router.route('link_user', linkUserHandler, {
-    helpText: 'Admin: record that a Telegram user and a Discord user are the same person: /link_user @user discord:<username>.'
+    helpText: 'Admin: record that a Telegram user and a Discord user are the same person: /link_user @user discord:<username>.',
+    discord: { options: [TELEGRAM_USER_OPTION, DISCORD_USER_OPTION], admin: 'server' }
 });
 router.route('unlink_user', unlinkUserHandler, {
-    helpText: 'Admin: forget a Telegram user\'s Discord account: /unlink_user @user.'
+    helpText: 'Admin: forget a Telegram user\'s Discord account: /unlink_user @user.',
+    discord: { options: [TELEGRAM_USER_OPTION, DISCORD_USER_OPTION], admin: 'server' }
 });
 
 if (steamEnabled) {
@@ -320,10 +324,12 @@ router.route('help', (bot: Bot, msg: Command) => {
 });
 
 router.route('rollcall_add_player', rollcallAddPlayerHandler, {
-    helpText: 'Add a player to the rollcall.'
+    helpText: 'Add a player to the rollcall.',
+    discord: { options: [TELEGRAM_USER_OPTION, DISCORD_USER_OPTION] }
 });
 router.route('rollcall_remove_player', rollcallRemovePlayerHandler, {
-    helpText: 'Remove a player from the rollcall.'
+    helpText: 'Remove a player from the rollcall.',
+    discord: { options: [TELEGRAM_USER_OPTION, DISCORD_USER_OPTION] }
 });
 router.route('rollcall_get_players', rollcallGetPlayersHandler, {
     helpText: 'Get all players in the rollcall.',
