@@ -1,9 +1,7 @@
 import { MessageEntity } from 'node-telegram-bot-api';
 import UserDAO, { User, userDisplayName } from './dao/UserDAO.js';
-import { toDiscordMarkdown } from './discord/markdown.js';
+import { DISCORD_USER_MENTION, toDiscordMarkdown } from './discord/markdown.js';
 import { Formatted, join, link, Part } from './format.js';
-
-const DISCORD_USER_MENTION = /<@!?(\d{17,19})>/g;
 
 // Tags people whose Telegram and Discord accounts are linked on the platform a message is relayed to.
 class RelayMentions {

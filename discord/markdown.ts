@@ -61,6 +61,8 @@ export const toDiscordMarkdown = (formatted: Formatted, replacements: Map<Messag
     return render(0, formatted.text.length, entities);
 };
 
+export const DISCORD_USER_MENTION = /<@!?(\d{17,19})>/g;
+
 export const DISCORD_MESSAGE_LIMIT = 2000;
 
 export const splitMessage = (content: string, limit: number = DISCORD_MESSAGE_LIMIT): string[] => {
