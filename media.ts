@@ -22,6 +22,9 @@ const megabytes = (bytes: number): string => `${Math.round(bytes / 1024 / 1024)}
 
 const tooBig = (name: string, size: number): string => `[${name}, ${megabytes(size)}]`;
 
+const mapsLink = ({ latitude, longitude }: NonNullable<TelegramMessage['location']>): string =>
+    `https://www.google.com/maps?q=${latitude},${longitude}`;
+
 export const telegramMedia = (msg: TelegramMessage): TelegramMedia | undefined => {
     const caption: Formatted = { text: msg.caption ?? '', entities: msg.caption_entities ?? [] };
     const file = (file_id: string, name: string, size?: number): TelegramMedia =>
@@ -52,6 +55,14 @@ export const telegramMedia = (msg: TelegramMessage): TelegramMedia | undefined =
         return { placeholder: '[video message]', caption };
     } else if (msg.poll) {
         return { placeholder: `[poll: ${msg.poll.question}]`, caption };
+    } else if (msg.venue) {
+        return { placeholder: `📍 ${[msg.venue.title, msg.venue.address].filter(Boolean).join(', ')} ${mapsLink(msg.venue.location)}`, caption };
+    } else if (msg.location) {
+        return { placeholder: `📍 ${mapsLink(msg.location)}`, caption };
+    } else if (msg.contact) {
+        return { placeholder: `👤 ${[msg.contact.first_name, msg.contact.last_name].filter(Boolean).join(' ')}: ${msg.contact.phone_number}`, caption };
+    } else if (msg.dice) {
+        return { placeholder: `${msg.dice.emoji} ${msg.dice.value}`, caption };
     }
     return undefined;
 };

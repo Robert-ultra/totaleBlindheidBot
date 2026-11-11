@@ -440,6 +440,28 @@ def step_user_sends_voice(context: Context) -> None:
     _send_media(context, {"voice": {"file_id": file_id, "file_unique_id": "u7", "duration": 3, "file_size": 16}})
 
 
+@when('the user shares the location (?P<lat>-?[\\d.]+), (?P<lon>-?[\\d.]+)')
+def step_user_shares_location(context: Context, lat: str, lon: str) -> None:
+    _send_media(context, {"location": {"latitude": float(lat), "longitude": float(lon)}})
+
+
+@when('the user shares the venue "(?P<title>[^"]*)" at "(?P<address>[^"]*)" on (?P<lat>-?[\\d.]+), (?P<lon>-?[\\d.]+)')
+def step_user_shares_venue(context: Context, title: str, address: str, lat: str, lon: str) -> None:
+    location: Dict[str, float] = {"latitude": float(lat), "longitude": float(lon)}
+    _send_media(context, {"location": location, "venue": {"location": location, "title": title, "address": address}})
+
+
+@when('the user shares the contact "(?P<first>[^"]*)" "(?P<last>[^"]*)" with phone "(?P<phone>[^"]*)"')
+def step_user_shares_contact(context: Context, first: str, last: str, phone: str) -> None:
+    contact: Dict[str, Any] = {"phone_number": phone, "first_name": first, **({"last_name": last} if last else {})}
+    _send_media(context, {"contact": contact})
+
+
+@when('the user rolls "(?P<emoji>[^"]*)" and gets (?P<value>\\d+)')
+def step_user_rolls_dice(context: Context, emoji: str, value: str) -> None:
+    _send_media(context, {"dice": {"emoji": emoji, "value": int(value)}})
+
+
 @then('the bot sends an? (?P<kind>photo|video|animation|document) "(?P<name>[^"]*)" with caption "(?P<caption>[^"]*)"')
 def step_bot_sends_media(context: Context, kind: str, name: str, caption: str) -> None:
     method: str = {"photo": "sendPhoto", "video": "sendVideo", "animation": "sendAnimation", "document": "sendDocument"}[kind]
