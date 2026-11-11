@@ -1,6 +1,8 @@
 import { Bot, CallbackQuery, InlineKeyboardButton } from 'node-telegram-bot-api';
 import { DateTime } from 'luxon';
-import { ExtendedMessage } from '../../MessageRouter.js';
+import { Command } from '../../MessageRouter.js';
+import CommandPermissions from '../../CommandPermissions.js';
+import { isBotAdmin } from '../../admin.js';
 import GameHistoryDAO, { GameHistoryEntry } from '../../dao/GameHistoryDAO.js';
 import { formatError } from '../../utils.js';
 import { bold, fmt, messageText } from '../../format.js';
@@ -18,12 +20,6 @@ export const PAGE_SIZE = 10;
 // by the main callback_query listener. Payloads: "<id>" deletes a record, "page:<uid>:<offset>"
 // re-renders the keyboard at another offset, "noop" is the inert page indicator, "cancel" closes.
 export const CALLBACK_PREFIX = 'delmatch:';
-
-// Only the configured Steam admin may delete match records.
-const isAdmin = (userId?: number): boolean => {
-    const admin = process.env.STEAM_ADMIN_TELEGRAM_USER_ID;
-    return !!admin && userId != null && String(userId) === admin;
-};
 
 // Plain-text description of a match record for button labels and confirmations,
 // e.g. "🏆 Vertigo · Competitive · 13-7".
@@ -86,29 +82,47 @@ export const pickerKeyboard = (
     return keyboard;
 };
 
-export default (bot: Bot, msg: ExtendedMessage): void => {
-    if (!isAdmin(msg.from?.id)) {
-        msg.reply('Only the admin can delete match records.');
-        return;
+// The confirmation, or undefined when the record is gone or belongs to another chat.
+const deleteRecord = async (chat_id: number, id: number): Promise<string | undefined> => {
+    const entry: GameHistoryEntry | null = await dao.getGameHistoryEntryById(id);
+    if (!entry || entry.chat_id !== chat_id || !(await dao.deleteGameHistoryEntry(id))) {
+        return undefined;
+    }
+    const who = entry.player_name ? ` (${entry.player_name})` : '';
+    return `🗑️ Deleted match record: ${describeEntry(entry)}${who}`;
+};
+
+const GONE = 'That match record no longer exists.';
+
+// Discord has no picker: it lists the records by number, and deletes the one whose number is given.
+export default async (bot: Bot, msg: Command): Promise<unknown> => {
+    if (!(await new CommandPermissions(bot).isAdmin(msg, 'bot'))) {
+        return msg.reply('Only the admin can delete match records.');
+    }
+    const record: RegExpMatchArray | null = msg.platform === 'discord' ? msg.command.argument.match(/^#?(\d+)$/) : null;
+    if (record) {
+        return msg.reply(await deleteRecord(msg.chat_id, Number(record[1])) ?? GONE);
     }
 
-    resolvePlayerTarget(dao, msg)
+    return resolvePlayerTarget(dao, msg)
         .then(target => {
             if (!target) {
                 return;  // resolvePlayerTarget already replied with the reason.
             }
-            return dao.getGameHistoryPage(msg.chat.id, target.user_id, 0, PAGE_SIZE)
+            return dao.getGameHistoryPage(msg.chat_id, target.user_id, 0, PAGE_SIZE)
                 .then(({ total, entries }) => {
                     if (total === 0) {
-                        msg.reply(target.name
+                        return msg.reply(target.name
                             ? `No match records for ${target.name} in this chat.`
                             : 'No match records for you in this chat.');
-                        return;
+                    } else if (msg.platform === 'discord') {
+                        return msg.replyPrivately([`Give the number of the match record to delete (${total} recorded):`,
+                            ...entries.map(entry => `#${entry.id} ${buttonLabel(entry)}`)].join('\n'));
                     }
 
                     const who = target.name ? fmt` for ${bold(target.name)}` : '';
                     return bot.api.sendMessage({
-                        chat_id: msg.chat.id,
+                        chat_id: msg.chat_id,
                         ...messageText(fmt`Select the match record to delete${who} (${total} recorded):`),
                         reply_markup: { inline_keyboard: pickerKeyboard(entries, target.user_id, total, 0) }
                     });
@@ -142,7 +156,7 @@ export const handleDeleteMatchCallback = (bot: Bot, query: CallbackQuery): void 
     if (arg === 'noop') {
         answer();
         return;
-    } else if (!isAdmin(query.from?.id)) {
+    } else if (!isBotAdmin(query.from?.id)) {
         answer('Only the admin can delete match records.');
         return;
     } else if (arg === 'cancel') {
@@ -189,22 +203,12 @@ export const handleDeleteMatchCallback = (bot: Bot, query: CallbackQuery): void 
         return;
     }
 
-    dao.getGameHistoryEntryById(id)
-        .then(entry => {
-            if (!entry || entry.chat_id !== message.chat.id) {
-                return replacePicker('That match record no longer exists.').then(() => answer());
-            }
-            return dao.deleteGameHistoryEntry(id).then(deleted => {
-                if (!deleted) {
-                    return replacePicker('That match record no longer exists.').then(() => answer());
-                }
-                const who = entry.player_name ? ` (${entry.player_name})` : '';
-                const confirmation = `🗑️ Deleted match record: ${describeEntry(entry)}${who}`;
-                return replacePicker(confirmation)
-                    .then(() => tellDiscord(message.chat.id, confirmation))
-                    .then(() => answer('Match record deleted.'));
-            });
-        })
+    deleteRecord(message.chat.id, id)
+        .then(confirmation => confirmation === undefined
+            ? replacePicker(GONE).then(() => answer())
+            : replacePicker(confirmation)
+                .then(() => tellDiscord(message.chat.id, confirmation))
+                .then(() => answer('Match record deleted.')))
         .catch((err: Error) => {
             console.error(`Error deleting match record ${id}:`, err);
             answer('Something went wrong.');

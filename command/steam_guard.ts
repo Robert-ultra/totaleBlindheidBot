@@ -1,30 +1,24 @@
 import { Bot } from 'node-telegram-bot-api';
-import { ExtendedMessage } from '../MessageRouter.js';
+import { Command } from '../MessageRouter.js';
+import CommandPermissions from '../CommandPermissions.js';
 import SteamService from '../SteamService.js';
 
-export default (bot: Bot, msg: ExtendedMessage): void => {
-    const adminId: string | undefined = process.env.STEAM_ADMIN_TELEGRAM_USER_ID;
-    if (!adminId) {
-        console.warn('STEAM_ADMIN_TELEGRAM_USER_ID is not set; refusing /steam_guard from user ' + msg.from?.id);
-        return;
-    } else if (String(msg.from?.id) !== String(adminId)) {
-        console.warn(`Unauthorized attempt to use /steam_guard by user ${msg.from?.id}`);
+export default async (bot: Bot, cmd: Command): Promise<unknown> => {
+    if (!(await new CommandPermissions(bot).isAdmin(cmd, 'bot'))) {
+        console.warn(`Unauthorized attempt to use /steam_guard by user ${cmd.user.id}`);
         return;
     }
 
-    const code: string | undefined = msg.command?.argument;
+    const code: string = cmd.command.argument;
     if (!code) {
-        msg.replyPrivately('Please specify the Steam Guard code.');
-        return;
+        return cmd.replyPrivately('Please specify the Steam Guard code.');
     }
 
     const steamService = SteamService.instance;
     if (!steamService) {
-        msg.replyPrivately('Steam service is not enabled.');
-        return;
+        return cmd.replyPrivately('Steam service is not enabled.');
     } else if (steamService.submitSteamGuardCode(code)) {
-        msg.replyPrivately('Steam Guard code submitted.');
-    } else {
-        msg.replyPrivately('No Steam Guard code is currently requested, or it was already provided.');
+        return cmd.replyPrivately('Steam Guard code submitted.');
     }
+    return cmd.replyPrivately('No Steam Guard code is currently requested, or it was already provided.');
 };

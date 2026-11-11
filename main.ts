@@ -282,10 +282,12 @@ if (steamEnabled) {
         discord: { argument: { name: 'setting', description: '"on" or "off".' }, admin: 'server' }
     });
     router.route('steam_guard', steamGuardHandler, {
-        helpText: 'Submit a Steam Guard code.'
+        helpText: 'Submit a Steam Guard code.',
+        discord: { argument: { name: 'code', description: 'The Steam Guard code Steam asked for.' }, admin: 'bot' }
     });
     router.route('set_steam_nickname', setSteamNicknameHandler, {
-        helpText: 'Admin only: change my nickname on Steam.'
+        helpText: 'Admin only: change my nickname on Steam.',
+        discord: { argument: { name: 'nickname', description: 'At most 32 characters.' }, admin: 'bot' }
     });
     router.route('game_history', gameHistoryHandler, {
         helpText: 'Show CS2 game history for this chat. Add a player name or mention to see theirs.',
@@ -296,7 +298,8 @@ if (steamEnabled) {
         discord: { argument: { name: 'player', description: 'A player name, @username or discord:username. Leave empty for yourself.' } }
     });
     router.route('delete_match_record', deleteMatchRecordHandler, {
-        helpText: 'Admin only: delete a mis-recorded match from a player\'s game history.'
+        helpText: 'Admin only: delete a mis-recorded match from a player\'s game history.',
+        discord: { argument: { name: 'record', description: 'The number of the record to delete, or a player whose records to list. Leave empty for yours.' }, admin: 'bot' }
     });
 }
 

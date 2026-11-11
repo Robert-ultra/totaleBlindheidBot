@@ -300,6 +300,15 @@ def step_discord_manager_runs_with_options(context: Context, username: str, name
     helpers.discord_run_command(channel_id, _author(username, name, user_id), command, manages_server=True, options=given)
 
 
+@when('Discord user "(?P<username>[^"]*)" named "(?P<name>[^"]*)" with id "(?P<user_id>\\d+)" who manages the server deletes the first match record listed in channel "(?P<channel_id>\\d+)"')
+def step_discord_delete_listed_record(context: Context, username: str, name: str, user_id: str, channel_id: str) -> None:
+    listing: Dict[str, Any] = next(m for m in reversed(helpers.discord_outbox(channel_id)) if _is_bot_message(m) and "match record to delete" in m["content"])
+    record: str = re.search(r"#(\d+)", listing["content"]).group(1)
+    context.cmd_chat = context.chat_id
+    context.cmd_baseline = len(helpers.get_outbox(context.chat_id))
+    helpers.discord_run_command(channel_id, _author(username, name, user_id), "delete_match_record", {"name": "record", "value": record}, manages_server=True)
+
+
 @then('Discord server "(?P<guild_id>\\d+)" offers the "/(?P<name>[a-z_]+)" slash command to server managers only')
 def step_slash_command_for_managers(context: Context, guild_id: str, name: str) -> None:
     definition: Optional[Dict[str, Any]] = helpers.discord_command_definition(guild_id, name)

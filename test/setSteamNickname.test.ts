@@ -27,8 +27,9 @@ const run = async (from: number, argument: string, loggedOn = true): Promise<{ r
         }
     } as unknown as SteamService;
     await setSteamNickname({} as Bot, {
-        from: { id: from },
-        command: { name: 'set_steam_nickname', argument, argumentTokens: argument.split(' ') },
+        platform: 'telegram',
+        user: { id: 1, telegram_id: from },
+        command: { name: 'set_steam_nickname', argument, argumentTokens: argument.split(' '), options: {} },
         reply: async (text: unknown) => replies.push(text)
     } as unknown as ExtendedMessage);
     return { replies, nicknames };
@@ -54,8 +55,9 @@ test('the bot cannot be renamed while it is not logged on, or without Steam at a
     const replies: unknown[] = [];
     process.env.STEAM_ADMIN_TELEGRAM_USER_ID = String(ADMIN);
     await setSteamNickname({} as Bot, {
-        from: { id: ADMIN },
-        command: { name: 'set_steam_nickname', argument: 'Blindganger', argumentTokens: ['Blindganger'] },
+        platform: 'telegram',
+        user: { id: 1, telegram_id: ADMIN },
+        command: { name: 'set_steam_nickname', argument: 'Blindganger', argumentTokens: ['Blindganger'], options: {} },
         reply: async (text: unknown) => replies.push(text)
     } as unknown as ExtendedMessage);
     assert.deepEqual(replies, ['I am not logged on to Steam right now.']);
