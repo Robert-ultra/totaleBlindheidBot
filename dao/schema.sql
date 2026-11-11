@@ -76,6 +76,7 @@ CREATE TABLE IF NOT EXISTS rsvp_entry (
     rsvp_list_id BIGINT       NOT NULL,
     user_id      BIGINT       NOT NULL,
     rsvp         ENUM('yes','maybe','no') NOT NULL,
+    responded_at DATETIME(3)  NULL,
     PRIMARY KEY (rsvp_list_id, user_id),
     CONSTRAINT fk_rsvp_entry_list FOREIGN KEY (rsvp_list_id)
         REFERENCES rsvp_list (id) ON DELETE CASCADE,

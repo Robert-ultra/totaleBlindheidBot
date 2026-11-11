@@ -9,7 +9,7 @@ import RsvpTapHandler from '../RsvpTapHandler.js';
 
 const list: RsvpList = { rsvp_id: 40, chat_id: -7, entries: {}, messages: [], created_at: new Date() };
 
-const fixture = (found: RsvpList | null = list, failure?: Error) => {
+const fixture = (found: RsvpList | null = list, failure?: Error, updated: RsvpList | undefined = found ?? undefined) => {
     const calls: unknown[][] = [];
     const record = (name: string, result?: unknown) => async (...args: unknown[]) => {
         calls.push([name, ...args]);
@@ -18,12 +18,13 @@ const fixture = (found: RsvpList | null = list, failure?: Error) => {
     const rsvpDao = {
         getRsvpListByMessage: record('getRsvpListByMessage', found ?? undefined),
         getRsvpListByDiscordMessage: record('getRsvpListByDiscordMessage', found ?? undefined),
+        getRsvpList: async () => found ?? undefined,
         setRsvpEntry: async (rsvp_id: number, entry: RsvpEntry) => {
             calls.push(['setRsvpEntry', rsvp_id, entry.user_id, entry.rsvp]);
             if (failure) {
                 throw failure;
             }
-            return found ?? undefined;
+            return updated;
         }
     } as unknown as RsvpDAO;
     const userDao = {
@@ -35,7 +36,10 @@ const fixture = (found: RsvpList | null = list, failure?: Error) => {
     const render = async (_bot: Bot, rsvp_id: number) => {
         calls.push(['render', rsvp_id]);
     };
-    return { calls, handler: new RsvpTapHandler(bot, rsvpDao, userDao, render) };
+    const ping = async (_bot: Bot, chat_id: number, text: string, people: RsvpEntry[]) => {
+        calls.push(['ping', chat_id, text, people.map(person => person.name)]);
+    };
+    return { calls, handler: new RsvpTapHandler(bot, rsvpDao, userDao, render, ping) };
 };
 
 const query = (data: string): CallbackQuery => ({ id: 'q', data, from: { id: 11 }, message: { message_id: 50, chat: { id: -7 } } } as unknown as CallbackQuery);
@@ -114,4 +118,38 @@ test('a Discord tap on another button is ignored', async () => {
     const { calls, handler } = fixture();
     await handler.handleDiscord(interaction('steam:yes', calls), link);
     assert.deepEqual(calls, []);
+});
+
+const withYes = (names: string[]): RsvpList => ({
+    ...list,
+    entries: Object.fromEntries(names.map((name, i) => [String(i + 1), { user_id: i + 1, name, rsvp: 'yes' as const, responded_at: new Date(1000 * (i + 1)) }]))
+});
+
+const pings = (calls: unknown[][]): unknown[][] => calls.filter(call => call[0] === 'ping');
+
+test('the tap that fills the lobby pings everyone in it', async () => {
+    const { calls, handler } = fixture(withYes(['Ann', 'Bob', 'Cid', 'Dee']), undefined, withYes(['Ann', 'Bob', 'Cid', 'Dee', 'Eve']));
+    await handler.handleTelegram(query('rsvp:yes'));
+    assert.deepEqual(pings(calls), [['ping', -7, 'Lobby full! ', ['Ann', 'Bob', 'Cid', 'Dee', 'Eve']]]);
+    assert.deepEqual(calls.at(-1), ['answerCallbackQuery', { callback_query_id: 'q' }]);
+});
+
+test('a yes on a full lobby waitlists quietly', async () => {
+    const { calls, handler } = fixture(withYes(['Ann', 'Bob', 'Cid', 'Dee', 'Eve']), undefined, withYes(['Ann', 'Bob', 'Cid', 'Dee', 'Eve', 'Fay']));
+    await handler.handleTelegram(query('rsvp:yes'));
+    assert.deepEqual(pings(calls), []);
+});
+
+test('a player dropping out pings the first one waiting that they are in', async () => {
+    const full: RsvpList = withYes(['Ann', 'Bob', 'Cid', 'Dee', 'Eve', 'Fay', 'Gus']);
+    const dropped: RsvpList = { ...full, entries: { ...full.entries, 2: { ...full.entries[2], rsvp: 'no' } } };
+    const { calls, handler } = fixture(full, undefined, dropped);
+    await handler.handleTelegram(query('rsvp:no'));
+    assert.deepEqual(pings(calls), [['ping', -7, "A spot opened up, you're in: ", ['Fay']]]);
+});
+
+test('a Discord tap that fills the lobby pings it too', async () => {
+    const { calls, handler } = fixture(withYes(['Ann', 'Bob', 'Cid', 'Dee']), undefined, withYes(['Ann', 'Bob', 'Cid', 'Dee', 'Eve']));
+    await handler.handleDiscord(interaction('rsvp:yes', calls), link);
+    assert.deepEqual(pings(calls), [['ping', -7, 'Lobby full! ', ['Ann', 'Bob', 'Cid', 'Dee', 'Eve']]]);
 });

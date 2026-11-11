@@ -233,6 +233,8 @@ const startTaggedMessageSweep = (bot: Bot): NodeJS.Timeout => setInterval(() => 
 }, TAGGED_MESSAGE_SWEEP_MS);
 
 export {
+    withLock,
+    rsvpLockKey,
     trackTaggedMessage,
     renderRsvpList,
     retireRsvpList,

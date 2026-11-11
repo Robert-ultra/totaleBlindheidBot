@@ -1,8 +1,7 @@
 import { User } from '../dao/UserDAO.js';
 import { Formatted } from '../format.js';
 import { parseMention } from '../mention.js';
-import { Rsvp } from '../dao/RsvpDAO.js';
-import { renderLists } from '../rsvp.js';
+import { renderLists, RsvpLists } from '../rsvp.js';
 import { toDiscordMarkdown } from './markdown.js';
 
 const discordMention = (mention: string, users: Record<number, User>): string => {
@@ -18,7 +17,7 @@ const discordMention = (mention: string, users: Record<number, User>): string =>
 export const withDiscordTags = (head: Formatted, tags: string[], users: Record<number, User>, markers: Record<string, string> = {}): string =>
     `${toDiscordMarkdown(head)}${tags.map(tag => `${markers[tag] ?? ''}${discordMention(tag, users)}`).join(' ')}`;
 
-export const renderDiscordMessage = (base: string, groups: Record<Rsvp, string[]>): string => {
+export const renderDiscordMessage = (base: string, groups: RsvpLists): string => {
     const lists: string = renderLists(groups);
     return lists ? `${base}\n\n${toDiscordMarkdown({ text: lists, entities: [] })}` : base;
 };

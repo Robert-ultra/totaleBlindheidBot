@@ -13,6 +13,7 @@ export interface RsvpEntry {
     name: string;        // non-pinging display name
     username?: string;   // telegram @username (no @) for rotation matching
     rsvp: Rsvp;
+    responded_at?: Date; // when they last changed their choice
 }
 
 export type RsvpMessageWhere =
@@ -52,7 +53,7 @@ class RsvpDAO {
             return undefined;
         }
         const [entryRows] = await conn.query<RowDataPacket[]>(
-            'SELECT e.user_id, e.rsvp, u.name, u.username, u.discord_name, u.discord_username FROM rsvp_entry e ' +
+            'SELECT e.user_id, e.rsvp, e.responded_at, u.name, u.username, u.discord_name, u.discord_username FROM rsvp_entry e ' +
             'JOIN user u ON u.id = e.user_id WHERE e.rsvp_list_id = :id',
             { id: rsvp_id }
         );
@@ -72,7 +73,8 @@ class RsvpDAO {
                     discord_username: row.discord_username ?? undefined
                 }),
                 username: row.username ?? undefined,
-                rsvp: row.rsvp
+                rsvp: row.rsvp,
+                responded_at: row.responded_at ?? undefined
             };
         }
         return {
@@ -99,8 +101,8 @@ class RsvpDAO {
             const rsvp_id = res.insertId;
             for (const entry of Object.values(list.entries)) {
                 await conn.query(
-                    'INSERT INTO rsvp_entry (rsvp_list_id, user_id, rsvp) VALUES (:rsvp_id, :user_id, :rsvp)',
-                    { rsvp_id, user_id: entry.user_id, rsvp: entry.rsvp }
+                    'INSERT INTO rsvp_entry (rsvp_list_id, user_id, rsvp, responded_at) VALUES (:rsvp_id, :user_id, :rsvp, :responded_at)',
+                    { rsvp_id, user_id: entry.user_id, rsvp: entry.rsvp, responded_at: entry.responded_at ?? new Date() }
                 );
             }
             for (const ref of list.messages) {
@@ -151,10 +153,12 @@ class RsvpDAO {
             if (listRows.length === 0) {
                 return undefined;
             }
+            // Repeating a choice keeps its time, so saying yes again keeps your place in the queue.
+            // MariaDB applies the assignments in order, so the IF still sees the old choice.
             await conn.query(
-                'INSERT INTO rsvp_entry (rsvp_list_id, user_id, rsvp) VALUES (:rsvp_id, :user_id, :rsvp) ' +
-                'ON DUPLICATE KEY UPDATE rsvp = VALUES(rsvp)',
-                { rsvp_id, user_id: entry.user_id, rsvp: entry.rsvp }
+                'INSERT INTO rsvp_entry (rsvp_list_id, user_id, rsvp, responded_at) VALUES (:rsvp_id, :user_id, :rsvp, :responded_at) ' +
+                'ON DUPLICATE KEY UPDATE responded_at = IF(rsvp = VALUES(rsvp), responded_at, VALUES(responded_at)), rsvp = VALUES(rsvp)',
+                { rsvp_id, user_id: entry.user_id, rsvp: entry.rsvp, responded_at: new Date() }
             );
             return this._loadRsvpList(conn, rsvp_id);
         });

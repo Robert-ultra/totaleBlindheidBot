@@ -1,28 +1,43 @@
 import { Bot, CallbackQuery, Message } from 'node-telegram-bot-api';
 import { ButtonInteraction, MessageFlags } from 'discord.js';
-import RsvpDAO, { Rsvp, RsvpList } from './dao/RsvpDAO.js';
+import RsvpDAO, { Rsvp, RsvpEntry, RsvpList } from './dao/RsvpDAO.js';
 import UserDAO, { User } from './dao/UserDAO.js';
 import { ChatLink } from './dao/ChatLinkDAO.js';
-import { entryFromUser } from './rsvp.js';
-import { renderRsvpList } from './taggedMessages.js';
+import { entryFromUser, lobby, Lobby, LOBBY_SIZE } from './rsvp.js';
+import { renderRsvpList, rsvpLockKey, withLock } from './taggedMessages.js';
+import { userMention } from './mention.js';
+import { mentionUsers, withTags } from './presence.js';
+import { withDiscordTags } from './discord/render.js';
+import { broadcast } from './messenger.js';
+import { asFormatted, Formatted } from './format.js';
 
 const PREFIX = 'rsvp:';
 const EXPIRED = 'This RSVP has expired.';
 const CHOICES: Rsvp[] = ['yes', 'maybe', 'no'];
 
 type Render = (bot: Bot, rsvp_id: number) => Promise<void>;
+type Ping = (bot: Bot, chat_id: number, text: string, people: RsvpEntry[]) => Promise<unknown>;
+
+const pingPeople: Ping = async (bot, chat_id, text, people) => {
+    const tags: string[] = people.map(person => userMention(person.user_id, person.name));
+    const head: Formatted = asFormatted(text);
+    const users = await mentionUsers(tags);
+    return broadcast(bot, { chat_id }, withTags(head, tags, users), withDiscordTags(head, tags, users));
+};
 
 class RsvpTapHandler {
     private readonly bot: Bot;
     private readonly rsvpDao: RsvpDAO;
     private readonly userDao: UserDAO;
     private readonly render: Render;
+    private readonly ping: Ping;
 
-    constructor(bot: Bot, rsvpDao: RsvpDAO = new RsvpDAO(), userDao: UserDAO = new UserDAO(), render: Render = renderRsvpList) {
+    constructor(bot: Bot, rsvpDao: RsvpDAO = new RsvpDAO(), userDao: UserDAO = new UserDAO(), render: Render = renderRsvpList, ping: Ping = pingPeople) {
         this.bot = bot;
         this.rsvpDao = rsvpDao;
         this.userDao = userDao;
         this.render = render;
+        this.ping = ping;
     }
 
     static parse(data: string | undefined): Rsvp | undefined {
@@ -71,9 +86,24 @@ class RsvpTapHandler {
     }
 
     private async record(list: RsvpList, user: User, rsvp: Rsvp): Promise<void> {
-        const updated: RsvpList | undefined = await this.rsvpDao.setRsvpEntry(list.rsvp_id, entryFromUser(user, rsvp));
-        if (updated) {
-            await this.render(this.bot, updated.rsvp_id);
+        const [before, updated] = await withLock(rsvpLockKey(list.rsvp_id), async () => [
+            await this.rsvpDao.getRsvpList(list.rsvp_id),
+            await this.rsvpDao.setRsvpEntry(list.rsvp_id, entryFromUser(user, rsvp))
+        ]);
+        if (!updated) {
+            return;
+        }
+        await this.render(this.bot, updated.rsvp_id);
+        await this.announce(updated.chat_id, lobby((before ?? list).entries), lobby(updated.entries));
+    }
+
+    private async announce(chat_id: number, before: Lobby, after: Lobby): Promise<void> {
+        if (before.players.length < LOBBY_SIZE && after.players.length === LOBBY_SIZE) {
+            await this.ping(this.bot, chat_id, 'Lobby full! ', after.players);
+        }
+        const promoted: RsvpEntry[] = after.players.filter(player => before.waiting.some(waiting => waiting.user_id === player.user_id));
+        if (promoted.length > 0) {
+            await this.ping(this.bot, chat_id, "A spot opened up, you're in: ", promoted);
         }
     }
 }

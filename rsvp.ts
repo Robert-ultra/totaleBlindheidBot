@@ -6,6 +6,24 @@ import { displayName, parseMention, userMention } from './mention.js';
 
 export type RsvpKeyboardKind = 'schedule' | 'rollcall';
 
+export const LOBBY_SIZE: number = Number(process.env.LOBBY_SIZE) || 5;
+
+// Display names per choice, with the yes voters past LOBBY_SIZE split off as the waitlist.
+export type RsvpLists = Record<Rsvp, string[]> & { waitlist?: string[] };
+
+export interface Lobby {
+    players: RsvpEntry[];
+    waiting: RsvpEntry[];
+}
+
+// The first LOBBY_SIZE to say yes play; the rest wait in the order they said yes.
+export const lobby = (entries: Record<string, RsvpEntry>): Lobby => {
+    const yes: RsvpEntry[] = Object.values(entries)
+        .filter(entry => entry.rsvp === 'yes')
+        .sort((a, b) => (a.responded_at?.getTime() ?? 0) - (b.responded_at?.getTime() ?? 0));
+    return { players: yes.slice(0, LOBBY_SIZE), waiting: yes.slice(LOBBY_SIZE) };
+};
+
 const LABELS: Record<RsvpKeyboardKind, Record<Rsvp, string>> = {
     schedule: { yes: "I'm in", maybe: 'Maybe', no: 'No' },
     rollcall: { yes: 'Joining', maybe: 'Maybe/Later', no: 'No' }
@@ -56,7 +74,7 @@ interface ResolvedPerson {
 }
 
 export interface RsvpGroups {
-    groups: Record<Rsvp, string[]>; // display names per rsvp value (only those who chose)
+    groups: RsvpLists;              // display names per rsvp value (only those who chose)
     tagged: string[];               // rotation mention strings whose rsvp != 'no'
 }
 
@@ -68,6 +86,7 @@ const resolve = (rotation: string[], entries: Record<string, RsvpEntry>): RsvpGr
     const people: ResolvedPerson[] = [];
     const byId: Map<number, ResolvedPerson> = new Map();
     const byUsername: Map<string, ResolvedPerson> = new Map();
+    const byEntry: Map<number, ResolvedPerson> = new Map();
 
     rotation.forEach(mention => {
         const parsed = parseMention(mention);
@@ -86,18 +105,20 @@ const resolve = (rotation: string[], entries: Record<string, RsvpEntry>): RsvpGr
             byId.get(entry.user_id) ||
             (entry.username ? byUsername.get(entry.username.toLowerCase()) : undefined);
 
-        if (matched) {
-            matched.rsvp = entry.rsvp;
-        } else {
-            people.push({ rsvp: entry.rsvp, name: entry.name, mention: userMention(entry.user_id, entry.name) });
+        const person: ResolvedPerson = matched ?? { name: entry.name, mention: userMention(entry.user_id, entry.name) };
+        person.rsvp = entry.rsvp;
+        byEntry.set(entry.user_id, person);
+        if (!matched) {
+            people.push(person);
         }
     });
 
-    const groups: Record<Rsvp, string[]> = { yes: [], maybe: [], no: [] };
+    const waiting: ResolvedPerson[] = lobby(entries).waiting.map(entry => byEntry.get(entry.user_id)!);
+    const groups: RsvpLists = { yes: [], maybe: [], no: [], waitlist: waiting.map(person => displayName(person.name)) };
     const tagged: string[] = [];
     people.forEach(person => {
         // Only people who have actually made a selection appear in the lists.
-        if (person.rsvp) {
+        if (person.rsvp && !waiting.includes(person)) {
             groups[person.rsvp].push(displayName(person.name));
         }
         // Tag every rotation player who didn't opt out, and everyone else who said yes or maybe.
@@ -109,14 +130,16 @@ const resolve = (rotation: string[], entries: Record<string, RsvpEntry>): RsvpGr
     return { groups, tagged };
 };
 
-// Build the 🙋‍♂️/🤷‍♂️/🙅‍♂️ block, omitting any group that has no members.
-const renderLists = (groups: Record<Rsvp, string[]>): string =>
-    (['yes', 'maybe', 'no'] as Rsvp[])
-        .filter(value => groups[value].length > 0)
-        .map(value => `${RSVP_EMOJI[value]} ${groups[value].join(' ')}`)
+const LIST_PREFIX: Record<keyof RsvpLists, string> = { ...RSVP_EMOJI, waitlist: '⏳ Waitlist:' };
+
+// Build the 🙋‍♂️/⏳/🤷‍♂️/🙅‍♂️ block, omitting any group that has no members.
+const renderLists = (groups: RsvpLists): string =>
+    (['yes', 'waitlist', 'maybe', 'no'] as (keyof RsvpLists)[])
+        .filter(value => (groups[value]?.length ?? 0) > 0)
+        .map(value => `${LIST_PREFIX[value]} ${groups[value]!.join(' ')}`)
         .join('\n');
 
-const renderMessage = (base: Formatted, groups: Record<Rsvp, string[]>): Formatted => {
+const renderMessage = (base: Formatted, groups: RsvpLists): Formatted => {
     const lists: string = renderLists(groups);
     return lists ? fmt`${base}\n\n${lists}` : base;
 };

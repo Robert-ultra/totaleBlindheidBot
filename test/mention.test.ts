@@ -53,7 +53,7 @@ test('resolve matches RSVP entries to rotation players by user id or username', 
         4: { user_id: 4, name: 'Eve', rsvp: 'maybe' as const }
     };
     assert.deepEqual(resolve(rotation, entries), {
-        groups: { yes: ['Alice'], maybe: ['Eve'], no: ['@​carol'] },
+        groups: { yes: ['Alice'], maybe: ['Eve'], no: ['@​carol'], waitlist: [] },
         tagged: ['[Alice](user:1)', 'Dave', '[Eve](user:4)']
     });
 });
