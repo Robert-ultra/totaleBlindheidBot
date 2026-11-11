@@ -38,6 +38,25 @@ test('voice and video notes are only noted', () => {
     assert.equal(telegramMedia(message({ text: 'plain' })), undefined);
 });
 
+test('locations and venues become maps links', () => {
+    const location = { latitude: 52.3684, longitude: 4.8897 };
+    assert.equal(telegramMedia(message({ location }))?.placeholder, '📍 https://www.google.com/maps?q=52.3684,4.8897');
+    assert.equal(telegramMedia(message({ location, venue: { location, title: 'Café Hoppe', address: 'Spui 18' } }))?.placeholder,
+        '📍 Café Hoppe, Spui 18 https://www.google.com/maps?q=52.3684,4.8897');
+});
+
+test('contacts become their name and phone number', () => {
+    assert.equal(telegramMedia(message({ contact: { first_name: 'Jan', last_name: 'Jansen', phone_number: '+31612345678' } }))?.placeholder,
+        '👤 Jan Jansen: +31612345678');
+    assert.equal(telegramMedia(message({ contact: { first_name: 'Piet', phone_number: '+31687654321' } }))?.placeholder,
+        '👤 Piet: +31687654321');
+});
+
+test('dice become their emoji and value', () => {
+    assert.equal(telegramMedia(message({ dice: { emoji: '🎲', value: 4 } }))?.placeholder, '🎲 4');
+    assert.equal(telegramMedia(message({ dice: { emoji: '🏀', value: 5 } }))?.placeholder, '🏀 5');
+});
+
 test('Discord attachments are sent with the Telegram method that shows them best', () => {
     assert.equal(classifyAttachment('a.gif', 10, 'image/gif'), 'animation');
     assert.equal(classifyAttachment('a.GIF', 10, null), 'animation');

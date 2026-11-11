@@ -33,6 +33,26 @@ Feature: relaying photos, files and stickers between Telegram and Discord
     When the user sends a voice message
     Then Discord channel "81011" receives "[voice message]" from "Tester"
 
+  Scenario: a location reaches Discord as a maps link
+    When the user shares the location 52.3731, 4.8922
+    Then Discord channel "81011" receives "📍 https://www.google.com/maps?q=52.3731,4.8922" from "Tester"
+
+  Scenario: a venue reaches Discord with its name, address and a maps link
+    When the user shares the venue "Café Hoppe" at "Spui 18" on 52.3684, 4.8897
+    Then Discord channel "81011" receives "📍 Café Hoppe, Spui 18 https://www.google.com/maps?q=52.3684,4.8897" from "Tester"
+
+  Scenario: a contact reaches Discord as name and phone number
+    When the user shares the contact "Jan" "Jansen" with phone "+31612345678"
+    Then Discord channel "81011" receives "👤 Jan Jansen: +31612345678" from "Tester"
+    When the user shares the contact "Piet" "" with phone "+31687654321"
+    Then Discord channel "81011" receives "👤 Piet: +31687654321" from "Tester"
+
+  Scenario: dice reach Discord as their emoji and value
+    When the user rolls "🎲" and gets 4
+    Then Discord channel "81011" receives "🎲 4" from "Tester"
+    When the user rolls "🎯" and gets 6
+    Then Discord channel "81011" receives "🎯 6" from "Tester"
+
   Scenario: a Discord image reaches Telegram as a photo and the other channel as a file
     When Discord user "alice" named "Alice" with id "810100000000000002" sends an image "cat.png" saying "look" in channel "81011"
     Then the bot sends a photo "cat.png" with caption "alice: look"
