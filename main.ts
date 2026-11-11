@@ -6,7 +6,6 @@ import consoleStamp from 'console-stamp';
 
 import { Bot, CallbackQuery, Context, Message } from 'node-telegram-bot-api';
 import { ButtonInteraction, ChatInputCommandInteraction, MessageFlags } from 'discord.js';
-import ScheduleDAO from './dao/ScheduleDAO.js';
 import RsvpDAO from './dao/RsvpDAO.js';
 import UserDAO from './dao/UserDAO.js';
 import SteamService from './SteamService.js';
@@ -17,12 +16,12 @@ import ChatLinkDAO, { ChatLink } from './dao/ChatLinkDAO.js';
 import { asFormatted, Part } from './format.js';
 import { recordDiscordSender, relayDiscordDeletion, relayDiscordEdit, relayFromDiscord, relayFromTelegram, relayTelegramEdit } from './relay.js';
 import ReactionMirror, { ReactionChange, telegramReactionChange } from './reactions.js';
-import { executeRollcall } from './command/rollcall.js';
 import MessageRouter, { Command } from './MessageRouter.js';
 import { Rsvp } from './dao/RsvpDAO.js';
 import { ensureSchema } from './dao/Database.js';
 import { entryFromUser } from './rsvp.js';
-import { closeScheduleConfirmation, refreshTaggedMessagesFor, renderRsvpList, startTaggedMessageSweep } from './taggedMessages.js';
+import RollcallScheduler from './RollcallScheduler.js';
+import { refreshTaggedMessagesFor, renderRsvpList, startTaggedMessageSweep } from './taggedMessages.js';
 
 // Command Handlers
 import hiHandler from './command/hi.js';
@@ -60,29 +59,12 @@ if (!token) {
 
 const baseApiUrl = process.env.TELEGRAM_API_BASE_URL;
 const bot = new Bot(token, baseApiUrl ? { apiRoot: baseApiUrl } : {});
-const scheduleDao = new ScheduleDAO();
 const rsvpDao = new RsvpDAO();
 const userDao = new UserDAO();
 const steamEnabled = !!(process.env.STEAM_USERNAME && process.env.STEAM_PASSWORD);
 
 const SCHEDULE_CHECK_MS = Number(process.env.SCHEDULE_CHECK_MS) || 30000;
-setInterval(() => {
-    scheduleDao.getScheduledRollcalls()
-        .then(schedules => {
-            const now: Date = new Date();
-            for (const [chat_id, schedule] of Object.entries(schedules)) {
-                const scheduledTime: Date = schedule.time;
-                if (scheduledTime <= now) {
-                    console.log(`Executing scheduled rollcall for chat ${chat_id}`);
-                    executeRollcall(bot, { chat_id: parseInt(chat_id) }, { rsvp_id: schedule.rsvp_id })
-                        .then(() => closeScheduleConfirmation(bot, schedule.rsvp_id))
-                        .catch((err: Error) => console.error(`Error executing scheduled rollcall for ${chat_id}:`, err))
-                        .finally(() => scheduleDao.removeScheduledRollcall(Number(chat_id)));
-                }
-            }
-        })
-        .catch((err: Error) => console.error('Error checking schedules:', err));
-}, SCHEDULE_CHECK_MS);
+new RollcallScheduler(bot).start(SCHEDULE_CHECK_MS);
 
 const handleRsvpCallback = (query: CallbackQuery): void => {
     const data: string | undefined = query.data;
