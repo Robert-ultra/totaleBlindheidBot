@@ -5,9 +5,8 @@ import consoleStamp from 'console-stamp';
 (consoleStamp as unknown as (console: Console, options?: object) => void)(console);
 
 import { Bot, CallbackQuery, Context, Message } from 'node-telegram-bot-api';
-import { ButtonInteraction, ChatInputCommandInteraction, MessageFlags } from 'discord.js';
+import { ChatInputCommandInteraction } from 'discord.js';
 import ScheduleDAO from './dao/ScheduleDAO.js';
-import RsvpDAO from './dao/RsvpDAO.js';
 import UserDAO from './dao/UserDAO.js';
 import SteamService from './SteamService.js';
 import GitHubService from './GitHubService.js';
@@ -19,10 +18,9 @@ import { recordDiscordSender, relayDiscordDeletion, relayDiscordEdit, relayFromD
 import ReactionMirror, { ReactionChange, telegramReactionChange } from './reactions.js';
 import { executeRollcall } from './command/rollcall.js';
 import MessageRouter, { Command } from './MessageRouter.js';
-import { Rsvp } from './dao/RsvpDAO.js';
 import { ensureSchema } from './dao/Database.js';
-import { entryFromUser } from './rsvp.js';
-import { closeScheduleConfirmation, refreshTaggedMessagesFor, renderRsvpList, startTaggedMessageSweep } from './taggedMessages.js';
+import RsvpTapHandler from './RsvpTapHandler.js';
+import { closeScheduleConfirmation, refreshTaggedMessagesFor, startTaggedMessageSweep } from './taggedMessages.js';
 
 // Command Handlers
 import hiHandler from './command/hi.js';
@@ -61,7 +59,6 @@ if (!token) {
 const baseApiUrl = process.env.TELEGRAM_API_BASE_URL;
 const bot = new Bot(token, baseApiUrl ? { apiRoot: baseApiUrl } : {});
 const scheduleDao = new ScheduleDAO();
-const rsvpDao = new RsvpDAO();
 const userDao = new UserDAO();
 const steamEnabled = !!(process.env.STEAM_USERNAME && process.env.STEAM_PASSWORD);
 
@@ -84,37 +81,7 @@ setInterval(() => {
         .catch((err: Error) => console.error('Error checking schedules:', err));
 }, SCHEDULE_CHECK_MS);
 
-const handleRsvpCallback = (query: CallbackQuery): void => {
-    const data: string | undefined = query.data;
-    const message: Message | undefined = query.message;
-    if (!data || !data.startsWith('rsvp:') || !message) {
-        return;
-    }
-
-    const rsvp = data.substring('rsvp:'.length) as Rsvp;
-    if (!['yes', 'maybe', 'no'].includes(rsvp)) {
-        return;
-    }
-
-    const chat_id: number = message.chat.id;
-    const message_id: number = message.message_id;
-
-    rsvpDao.getRsvpListByMessage(chat_id, message_id)
-        .then(list => {
-            if (!list) {
-                return bot.api.answerCallbackQuery({ callback_query_id: query.id, text: 'This RSVP has expired.' });
-            }
-
-            return userDao.fromTelegram(query.from)
-                .then(user => rsvpDao.setRsvpEntry(list.rsvp_id, entryFromUser(user, rsvp)))
-                .then(updated => updated ? renderRsvpList(bot, updated.rsvp_id) : undefined)
-                .then(() => bot.api.answerCallbackQuery({ callback_query_id: query.id }));
-        })
-        .catch((err: Error) => {
-            console.error('Error handling RSVP callback:', err);
-            bot.api.answerCallbackQuery({ callback_query_id: query.id, text: 'Something went wrong.' }).catch(() => undefined);
-        });
-};
+const rsvpTapHandler = new RsvpTapHandler(bot);
 
 // Steam Service
 let steamService: SteamService | null = null;
@@ -160,30 +127,8 @@ const handleDiscordCommand = async (interaction: ChatInputCommandInteraction, li
     }
 };
 
-const handleDiscordButton = async (interaction: ButtonInteraction, link: ChatLink): Promise<void> => {
-    if (!interaction.customId.startsWith('rsvp:')) {
-        return;
-    }
-    const rsvp = interaction.customId.substring('rsvp:'.length) as Rsvp;
-    if (!['yes', 'maybe', 'no'].includes(rsvp)) {
-        return;
-    }
-    const list = await rsvpDao.getRsvpListByDiscordMessage(interaction.channelId, interaction.message.id);
-    if (!list) {
-        await interaction.reply({ content: 'This RSVP has expired.', flags: MessageFlags.Ephemeral });
-        return;
-    }
-    const user = await userDao.fromDiscord({ id: interaction.user.id, username: interaction.user.username, global_name: interaction.user.globalName });
-    await userDao.addUserChat(user.id, link.telegram_chat_id);
-    const updated = await rsvpDao.setRsvpEntry(list.rsvp_id, entryFromUser(user, rsvp));
-    await interaction.deferUpdate();
-    if (updated) {
-        await renderRsvpList(bot, updated.rsvp_id);
-    }
-};
-
 discordService?.onCommand(handleDiscordCommand);
-discordService?.onButton(handleDiscordButton);
+discordService?.onButton((interaction, link) => rsvpTapHandler.handleDiscord(interaction, link));
 
 const registerAllDiscordCommands = async (): Promise<void> => {
     if (!discordService) {
@@ -369,7 +314,7 @@ bot.on('callback_query', (ctx: Context) => {
     } else if (rollcallPlayerPicker.handle(bot, query)) {
         return;
     }
-    handleRsvpCallback(query);
+    rsvpTapHandler.handleTelegram(query);
 });
 
 bot.catch((error: unknown) => {
