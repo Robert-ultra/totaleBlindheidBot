@@ -11,6 +11,7 @@ import { bold, fmt, Formatted, sameFormatted } from './format.js';
 import { deleteMirrored, editMirrored, sendMirrored } from './messenger.js';
 import { parseMention } from './mention.js';
 import Streak from './stats/Streak.js';
+import RichPresence, { RichPresenceSource } from './RichPresence.js';
 import { saveSteamFile, readSteamFile, withTransaction } from './dao/Database.js';
 import {
     segmentStream, findCoPlayers, deriveRounds, continuesMatch, parseRawScore as parseRawScoreFn,
@@ -1211,6 +1212,15 @@ class SteamService {
             return 'online';
         }
         return 'offline';
+    }
+
+    // The rich presence of the user's account in CS2; undefined when none of them is.
+    async getRichPresence(tgUserId: number): Promise<RichPresence | undefined> {
+        const settings = await this.userDao.getUserSettings(tgUserId);
+        const playing: RichPresenceSource | undefined = (settings.steam_ids || [])
+            .map(sid => this.client.users[sid])
+            .find(user => user?.gameid == this.appIdCS2);
+        return playing ? new RichPresence(playing) : undefined;
     }
 
     // Called with a Telegram user id whenever that user's presence changes.
