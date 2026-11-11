@@ -4,7 +4,9 @@ import GameHistoryDAO, { GameHistoryEntry } from '../dao/GameHistoryDAO.js';
 import { formatError } from '../utils.js';
 import { bold, fmt, Formatted, join } from '../format.js';
 import { GameResult, parseScore, scoreResult } from './game_history.js';
-import { resolvePlayerTarget } from './playerArg.js';
+import { matchPlayerArgument, mismatchReply, resolvePlayerTarget } from './playerArg.js';
+import { DuoStats, splitDuo } from '../stats/DuoStats.js';
+import { userDisplayName } from '../dao/UserDAO.js';
 
 const dao = new GameHistoryDAO();
 
@@ -185,7 +187,20 @@ export const renderStats = (entries: GameHistoryEntry[]): Formatted | null => {
     return join(blocks, '\n\n');
 };
 
-export default (bot: Bot, msg: Command): Promise<unknown> =>
+const duoStats = async (msg: Command, sides: [string, string]): Promise<unknown> => {
+    const players = await dao.getChatPlayers(msg.chat_id);
+    const matches = sides.map(side => matchPlayerArgument(players, side));
+    const mismatch = matches.map(mismatchReply).find(Boolean);
+    if (mismatch) {
+        return msg.reply(mismatch);
+    }
+    const sender = { user_id: msg.user.id, name: players.find(p => p.user_id === msg.user.id)?.name ?? userDisplayName(msg.user) };
+    const [player, partner] = matches.map(match => match.kind === 'player' ? match : sender);
+    const entries = await dao.getGameHistory(msg.chat_id, player.user_id);
+    return msg.reply(DuoStats.of(entries, partner.user_id).render(player.name, partner.name));
+};
+
+const playerStats = (msg: Command): Promise<unknown> =>
     resolvePlayerTarget(dao, msg)
         .then(target => {
             if (!target) {
@@ -202,5 +217,10 @@ export default (bot: Bot, msg: Command): Promise<unknown> =>
                     const header = target.name ? fmt`Competitive stats for ${bold(target.name)}\n` : '';
                     return msg.reply(fmt`${header}${text}`);
                 });
-        })
+        });
+
+export default (bot: Bot, msg: Command): Promise<unknown> => {
+    const sides = splitDuo(msg.command?.argument ?? '');
+    return (sides ? duoStats(msg, sides) : playerStats(msg))
         .catch((err: Error) => msg.reply(formatError(err)));
+};

@@ -91,16 +91,22 @@ export const resolvePlayerTarget = async (dao: GameHistoryDAO, msg: Command): Pr
 
     const players = mention ? [] : await dao.getChatPlayers(msg.chat_id);
     const match = matchPlayerArgument(players, argument, mention);
+    const mismatch = mismatchReply(match);
+    if (mismatch) {
+        await msg.reply(mismatch);
+        return null;
+    }
+    return match.kind === 'player' ? { user_id: match.user_id, name: match.name } : { user_id: msg.user.id };
+};
+
+// Why a player argument resolved to nobody, or null when it did resolve.
+export const mismatchReply = (match: PlayerMatch): string | null => {
     switch (match.kind) {
-        case 'self':
-            return { user_id: msg.user.id };
-        case 'player':
-            return { user_id: match.user_id, name: match.name };
         case 'none':
-            await msg.reply(`I don't have any recorded games for "${match.needle}" in this chat.`);
-            return null;
+            return `I don't have any recorded games for "${match.needle}" in this chat.`;
         case 'ambiguous':
-            await msg.reply(`"${match.needle}" matches multiple players: ${match.names.join(', ')}. Please be more specific.`);
+            return `"${match.needle}" matches multiple players: ${match.names.join(', ')}. Please be more specific.`;
+        default:
             return null;
     }
 };
