@@ -21,7 +21,7 @@ Feature: read-only commands on Discord
     When Discord user "kit_cs" named "Kit" with id "940100000000000001" runs "/help" in channel "94011"
     Then Discord channel "94011" receives a bot message containing "/hi: Craving that small talk, are you?"
     And Discord channel "94011" receives a bot message containing "/game\_history: Show CS2 game history for this chat."
-    And Discord channel "94011" receives no bot message containing "link\_chat"
+    And Discord channel "94011" receives no bot message containing "/link\_chat"
 
   Scenario: /rollcall_get_players lists the rotation on Discord
     When Discord user "kit_cs" named "Kit" with id "940100000000000001" runs "/rollcall_get_players" in channel "94011"

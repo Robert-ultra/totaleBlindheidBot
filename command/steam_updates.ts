@@ -1,21 +1,17 @@
 import { Bot } from 'node-telegram-bot-api';
-import { ExtendedMessage } from '../MessageRouter.js';
+import { Command } from '../MessageRouter.js';
 import ChatDAO from '../dao/ChatDAO.js';
 import { formatError } from '../utils.js';
 
 const dao = new ChatDAO();
 
-export default (bot: Bot, msg: ExtendedMessage): void => {
-    const arg: string | undefined = msg.command?.argument?.toLowerCase();
+export default (bot: Bot, cmd: Command): Promise<unknown> => {
+    const arg: string = cmd.command.argument.toLowerCase();
     if (arg !== 'on' && arg !== 'off') {
-        msg.reply('Please specify "on" or "off" to enable or disable Steam updates for this chat.');
-        return;
+        return cmd.reply('Please specify "on" or "off" to enable or disable Steam updates for this chat.');
     }
 
-    const enabled: boolean = arg === 'on';
-    dao.setChatSettings(msg.chat.id, { steam_updates: enabled })
-        .then(() => {
-            msg.reply(`Steam updates for this chat have been turned ${arg}.`);
-        })
-        .catch((err: Error) => msg.reply(formatError(err)));
+    return dao.setChatSettings(cmd.chat_id, { steam_updates: arg === 'on' })
+        .then(() => cmd.reply(`Steam updates for this chat have been turned ${arg}.`))
+        .catch((err: Error) => cmd.reply(formatError(err)));
 };

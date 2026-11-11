@@ -579,8 +579,8 @@ def discord_webhooks() -> List[Dict[str, Any]]:
     return resp.json()["webhooks"]
 
 
-def discord_run_command(channel_id: str, user: Dict[str, Any], name: str, argument: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
-    body: Dict[str, Any] = {"channel_id": channel_id, "user": user, "name": name}
+def discord_run_command(channel_id: str, user: Dict[str, Any], name: str, argument: Optional[Dict[str, str]] = None, manages_server: bool = False) -> Dict[str, Any]:
+    body: Dict[str, Any] = {"channel_id": channel_id, "user": user, "name": name, "manages_server": manages_server}
     if argument:
         body["argument"] = argument
     resp = requests.post(f"{DISCORD_MOCK_URL}/test/interactions/command", json=body, timeout=5)
@@ -599,6 +599,12 @@ def discord_commands() -> Dict[str, List[str]]:
     resp = requests.get(f"{DISCORD_MOCK_URL}/test/commands", timeout=5)
     resp.raise_for_status()
     return resp.json()["commands"]
+
+
+def discord_command_definition(guild_id: str, name: str) -> Optional[Dict[str, Any]]:
+    resp = requests.get(f"{DISCORD_MOCK_URL}/test/commands", timeout=5)
+    resp.raise_for_status()
+    return next((c for c in resp.json()["definitions"].get(guild_id, []) if c["name"] == name), None)
 
 
 def discord_button_labels(message: Dict[str, Any]) -> List[str]:

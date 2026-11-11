@@ -46,6 +46,7 @@ PERMISSIONS = {
     "Manage Webhooks": 1 << 29,
 }
 DEFAULT_PERMISSIONS = sum(PERMISSIONS.values())
+MANAGE_GUILD = 1 << 5
 
 app = Flask(__name__)
 _lock = threading.Lock()
@@ -875,7 +876,7 @@ def _interaction_base(body: Dict[str, Any]) -> Dict[str, Any]:
         "channel": _channel_object(guild, channel) if channel else {"id": body["channel_id"], "type": 0},
         "member": {
             "user": user, "nick": body.get("nick"), "roles": [], "joined_at": _now(), "deaf": False, "mute": False,
-            "flags": 0, "permissions": str(DEFAULT_PERMISSIONS),
+            "flags": 0, "permissions": str(DEFAULT_PERMISSIONS | (MANAGE_GUILD if body.get("manages_server") else 0)),
         },
         "user": user,
         "app_permissions": str(DEFAULT_PERMISSIONS),
@@ -899,9 +900,8 @@ def inject_command() -> Response:
         registered = next((c for c in _commands.get(interaction["guild_id"] or "", []) if c["name"] == body["name"]), None)
         if not registered:
             return _error(404, 0, f"discord_mock: command {body['name']!r} is not registered in guild {interaction['guild_id']}")
-        options = []
-        if body.get("argument"):
-            options.append({"type": 3, "name": body["argument"]["name"], "value": body["argument"]["value"]})
+        given = ([body["argument"]] if body.get("argument") else []) + body.get("options", [])
+        options = [{"type": 3, "name": option["name"], "value": option["value"]} for option in given]
         interaction["type"] = 2
         interaction["data"] = {
             "id": registered["id"], "name": registered["name"], "type": 1, "options": options,
@@ -932,7 +932,7 @@ def inject_button() -> Response:
 @app.route("/test/commands", methods=["GET"])
 def test_commands() -> Response:
     with _lock:
-        return jsonify({"ok": True, "commands": {g: [c["name"] for c in cs] for g, cs in _commands.items()}})
+        return jsonify({"ok": True, "commands": {g: [c["name"] for c in cs] for g, cs in _commands.items()}, "definitions": _commands})
 
 
 @app.route("/test/outbox", methods=["GET"])

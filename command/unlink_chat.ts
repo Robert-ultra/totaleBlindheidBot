@@ -1,6 +1,6 @@
 import { Bot } from 'node-telegram-bot-api';
-import { ExtendedMessage } from '../MessageRouter.js';
-import { isChatAdmin } from '../admin.js';
+import { Command } from '../MessageRouter.js';
+import CommandPermissions from '../CommandPermissions.js';
 import ChatLinkDAO, { ChatLink } from '../dao/ChatLinkDAO.js';
 import DiscordService from '../discord/DiscordService.js';
 import { formatError } from '../utils.js';
@@ -26,41 +26,44 @@ const tearDown = async (discord: DiscordService, link: ChatLink): Promise<void> 
         .catch((err: Error) => console.error(`Could not announce unlink in Discord channel ${link.discord_channel_id}:`, err));
 };
 
-export default async (bot: Bot, msg: ExtendedMessage): Promise<void> => {
+// On Discord only channels of the server the command is given in can be unlinked.
+const unlinkOne = async (cmd: Command, discord: DiscordService, channel_id: string): Promise<unknown> => {
+    if (!isSnowflake(channel_id)) {
+        return cmd.replyPrivately('Usage: /unlink_chat [Discord channel id]. Without an id, every linked channel is unlinked.');
+    }
+    const link: ChatLink | undefined = await chatLinkDao.getLinkByChannel(channel_id);
+    if (!link || link.telegram_chat_id !== cmd.chat_id || (cmd.discord && link.discord_guild_id !== cmd.discord.link.discord_guild_id)) {
+        return cmd.replyPrivately('That channel is not linked to this group.');
+    }
+    await tearDown(discord, link);
+    return cmd.replyPrivately(`Unlinked Discord channel ${channel_id}.`);
+};
+
+export default async (bot: Bot, cmd: Command): Promise<void> => {
     try {
         const discord: DiscordService | null = DiscordService.instance;
         if (!discord) {
-            await msg.replyPrivately(NOT_CONFIGURED);
+            await cmd.replyPrivately(NOT_CONFIGURED);
             return;
-        } else if (!(await isChatAdmin(bot, msg.chat.id, msg.from?.id))) {
-            await msg.replyPrivately(ADMIN_ONLY);
+        } else if (!(await new CommandPermissions(bot).isAdmin(cmd, 'server'))) {
+            await cmd.replyPrivately(ADMIN_ONLY);
             return;
         }
 
-        const channel_id: string | undefined = msg.command.argumentTokens[0];
+        const channel_id: string | undefined = cmd.command.argumentTokens[0] ?? cmd.discord?.link.discord_channel_id;
         if (channel_id !== undefined) {
-            if (!isSnowflake(channel_id)) {
-                await msg.replyPrivately('Usage: /unlink_chat [Discord channel id]. Without an id, every linked channel is unlinked.');
-                return;
-            }
-            const link: ChatLink | undefined = await chatLinkDao.getLinkByChannel(channel_id);
-            if (!link || link.telegram_chat_id !== msg.chat.id) {
-                await msg.replyPrivately('That channel is not linked to this group.');
-                return;
-            }
-            await tearDown(discord, link);
-            await msg.replyPrivately(`Unlinked Discord channel ${channel_id}.`);
+            await unlinkOne(cmd, discord, channel_id);
             return;
         }
 
-        const links: ChatLink[] = await chatLinkDao.getLinks(msg.chat.id);
+        const links: ChatLink[] = await chatLinkDao.getLinks(cmd.chat_id);
         if (links.length === 0) {
-            await msg.replyPrivately('No Discord channels are linked to this group.');
+            await cmd.replyPrivately('No Discord channels are linked to this group.');
             return;
         }
         await Promise.all(links.map(link => tearDown(discord, link)));
-        await msg.replyPrivately(`Unlinked ${links.length} Discord channel${links.length === 1 ? '' : 's'}.`);
+        await cmd.replyPrivately(`Unlinked ${links.length} Discord channel${links.length === 1 ? '' : 's'}.`);
     } catch (err: any) {
-        await msg.replyPrivately(formatError(err));
+        await cmd.replyPrivately(formatError(err));
     }
 };

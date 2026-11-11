@@ -250,13 +250,15 @@ router.route('wingman', wingmanHandler, {
     discord: {}
 });
 router.route('github_notify', githubNotifyHandler, {
-    helpText: 'Enable or disable GitHub commit notifications for this chat (on/off).'
+    helpText: 'Enable or disable GitHub commit notifications for this chat (on/off).',
+    discord: { argument: { name: 'setting', description: '"on" or "off".' }, admin: 'server' }
 });
 router.route('link_chat', linkChatHandler, {
     helpText: 'Admin: relay this group to and from a Discord channel: /link_chat <channel id>.'
 });
 router.route('unlink_chat', unlinkChatHandler, {
-    helpText: 'Admin: stop relaying to a Discord channel (/unlink_chat <channel id>), or to all of them (no id).'
+    helpText: 'Admin: stop relaying to a Discord channel (/unlink_chat <channel id>), or to all of them (no id).',
+    discord: { argument: { name: 'channel', description: 'The id of a linked channel of this server. Leave empty for this channel.' }, admin: 'server' }
 });
 router.route('link_user', linkUserHandler, {
     helpText: 'Admin: record that a Telegram user and a Discord user are the same person: /link_user @user discord:<username>.'
@@ -272,7 +274,8 @@ if (steamEnabled) {
         discord: { argument: { name: 'ids', description: 'Your SteamID64(s), the 17-digit number starting with 7656, comma-separated.' } }
     });
     router.route('steam_updates', steamUpdatesHandler, {
-        helpText: 'Enable or disable Steam updates for this chat (on/off).'
+        helpText: 'Enable or disable Steam updates for this chat (on/off).',
+        discord: { argument: { name: 'setting', description: '"on" or "off".' }, admin: 'server' }
     });
     router.route('steam_guard', steamGuardHandler, {
         helpText: 'Submit a Steam Guard code.'

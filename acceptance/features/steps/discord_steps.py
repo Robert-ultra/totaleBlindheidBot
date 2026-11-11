@@ -278,6 +278,27 @@ def step_discord_runs_with(context: Context, username: str, name: str, user_id: 
     helpers.discord_run_command(channel_id, _author(username, name, user_id), command, {"name": option, "value": value})
 
 
+@when('Discord user "(?P<username>[^"]*)" named "(?P<name>[^"]*)" with id "(?P<user_id>\\d+)" who manages the server runs "/(?P<command>[a-z_]+)" in channel "(?P<channel_id>\\d+)"')
+def step_discord_manager_runs(context: Context, username: str, name: str, user_id: str, command: str, channel_id: str) -> None:
+    context.cmd_chat = context.chat_id
+    context.cmd_baseline = len(helpers.get_outbox(context.chat_id))
+    helpers.discord_run_command(channel_id, _author(username, name, user_id), command, manages_server=True)
+
+
+@when('Discord user "(?P<username>[^"]*)" named "(?P<name>[^"]*)" with id "(?P<user_id>\\d+)" who manages the server runs "/(?P<command>[a-z_]+)" with (?P<option>[a-z]+) "(?P<value>[^"]*)" in channel "(?P<channel_id>\\d+)"')
+def step_discord_manager_runs_with(context: Context, username: str, name: str, user_id: str, command: str, option: str, value: str, channel_id: str) -> None:
+    context.cmd_chat = context.chat_id
+    context.cmd_baseline = len(helpers.get_outbox(context.chat_id))
+    helpers.discord_run_command(channel_id, _author(username, name, user_id), command, {"name": option, "value": value}, manages_server=True)
+
+
+@then('Discord server "(?P<guild_id>\\d+)" offers the "/(?P<name>[a-z_]+)" slash command to server managers only')
+def step_slash_command_for_managers(context: Context, guild_id: str, name: str) -> None:
+    definition: Optional[Dict[str, Any]] = helpers.discord_command_definition(guild_id, name)
+    assert definition is not None, f"Expected /{name} among the slash commands of server {guild_id}"
+    assert definition.get("default_member_permissions") == "32", f"Expected /{name} to need Manage Server, got {definition.get('default_member_permissions')!r}"
+
+
 @then('Discord server "(?P<guild_id>\\d+)" offers the "/(?P<name>[a-z_]+)" slash command')
 def step_slash_command_offered(context: Context, guild_id: str, name: str) -> None:
     registered: List[str] = helpers.discord_commands().get(guild_id, [])
