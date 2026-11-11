@@ -167,6 +167,20 @@ class UserDAO {
         return result;
     }
 
+    async getUserByTelegramId(telegram_id: number): Promise<User | undefined> {
+        const rows = await query<RowDataPacket[]>(`SELECT ${USER_COLUMNS} FROM user WHERE telegram_id = :telegram_id`, { telegram_id });
+        return rows.length > 0 ? userFromRow(rows[0]) : undefined;
+    }
+
+    async getUsersByDiscordIds(discord_ids: string[]): Promise<Record<string, User>> {
+        const distinct = [...new Set(discord_ids)];
+        if (distinct.length === 0) {
+            return {};
+        }
+        const rows = await query<RowDataPacket[]>(`SELECT ${USER_COLUMNS} FROM user WHERE discord_id IN (?)`, [distinct]);
+        return Object.fromEntries(rows.map(userFromRow).map(user => [user.discord_id, user]));
+    }
+
     async getUserSettings(user_id: number): Promise<UserSettings> {
         const [settingsRows, steamRows] = await Promise.all([
             query<RowDataPacket[]>('SELECT timezone FROM user_settings WHERE user_id = :user_id', { user_id }),

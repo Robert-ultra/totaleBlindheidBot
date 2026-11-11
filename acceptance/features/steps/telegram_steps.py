@@ -76,6 +76,13 @@ def step_user_edits(context: Context, text: str) -> None:
     helpers.inject_edited_message(text, context.chat_id, context.user, context.last_sent_message_id, context.last_sent_reply_to)
 
 
+@when('the user edits that message to "(?P<text>[^"]*)" typing the username "(?P<word>@[A-Za-z0-9_]+)"')
+def step_user_edits_username_mention(context: Context, text: str, word: str) -> None:
+    context.cmd_baseline = len(helpers.get_outbox(context.chat_id))
+    entity: Dict[str, Any] = {"type": "mention", "offset": text.index(word), "length": len(word)}
+    helpers.inject_edited_message(text, context.chat_id, context.user, context.last_sent_message_id, context.last_sent_reply_to, entities=[entity])
+
+
 @then('the bot deletes its (?P<count>\\d+) cop(?:y|ies)')
 def step_bot_deletes_copies(context: Context, count: str) -> None:
     def deleted() -> List[Any]:
