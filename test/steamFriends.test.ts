@@ -127,7 +127,7 @@ const linkOwnIds = async (ids: string, outcome: Partial<FriendRequests>): Promis
         platform: 'discord',
         chat_id: 1,
         user: { id: 7 },
-        command: { name: 'steam_user_id', argument: ids, argumentTokens: ids.split(' ') },
+        command: { name: 'steam_user_id', argument: ids, argumentTokens: ids.split(' '), options: {} },
         reply: async text => replies.push(text),
         replyPrivately: async () => undefined
     };

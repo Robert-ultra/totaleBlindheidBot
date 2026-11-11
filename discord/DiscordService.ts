@@ -78,10 +78,17 @@ export type DiscordReactionHandler = (channel_id: string, message_id: string, us
 export type DiscordCommandHandler = (interaction: ChatInputCommandInteraction, link: ChatLink) => Promise<void>;
 export type DiscordButtonHandler = (interaction: ButtonInteraction, link: ChatLink) => Promise<void>;
 
+export interface SlashOption {
+    name: string;
+    description: string;
+}
+
 export interface SlashCommand {
     name: string;
     description: string;
-    argument?: { name: string; description: string };
+    options: SlashOption[];
+    // Discord shows these only to members who can manage the server, until a server admin overrides it.
+    admin: boolean;
 }
 
 export const rsvpComponents = (kind: RsvpKeyboardKind): ActionRowBuilder<ButtonBuilder>[] => [
@@ -211,12 +218,13 @@ class DiscordService implements MemberLookup {
         await this.client.application.commands.set(this.slashCommands.map(command => ({
             name: command.name,
             description: command.description.slice(0, 100),
-            options: command.argument ? [{
-                type: ApplicationCommandOptionType.String,
-                name: command.argument.name,
-                description: command.argument.description.slice(0, 100),
+            options: command.options.map(option => ({
+                type: ApplicationCommandOptionType.String as const,
+                name: option.name,
+                description: option.description.slice(0, 100),
                 required: false
-            }] : []
+            })),
+            defaultMemberPermissions: command.admin ? PermissionFlagsBits.ManageGuild : null
         })), guild_id);
     }
 

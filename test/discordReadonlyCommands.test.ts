@@ -18,7 +18,7 @@ const discordCommand = (argument: string, user: User, replies: Part[]): Command 
     platform: 'discord',
     chat_id: -9,
     user,
-    command: { name: 'x', argument, argumentTokens: argument ? argument.split(' ') : [] },
+    command: { name: 'x', argument, argumentTokens: argument ? argument.split(' ') : [], options: {} },
     reply: async (text: Part) => replies.push(text),
     replyPrivately: async () => undefined
 });

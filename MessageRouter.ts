@@ -6,11 +6,15 @@ import { broadcast } from './messenger.js';
 import { toDiscordMarkdown } from './discord/markdown.js';
 import { User } from './dao/UserDAO.js';
 import { ChatLink } from './dao/ChatLinkDAO.js';
+import { SlashCommand, SlashOption } from './discord/DiscordService.js';
+import CommandPermissions, { AdminLevel } from './CommandPermissions.js';
 
 export interface CommandContext {
     name: string;
     argument: string;
     argumentTokens: string[];
+    // Discord's named options; Telegram has none.
+    options: Readonly<Record<string, string>>;
 }
 
 // chat_id is the Telegram chat, also for a command typed in a linked Discord channel.
@@ -38,8 +42,16 @@ export type CommandHandler<T extends Command = Command> = (bot: Bot, cmd: T) => 
 export type ReplyHandler = (bot: Bot, msg: Message) => boolean;
 
 export interface DiscordCommandOptions {
-    argument?: { name: string; description: string };
+    // Fills `command.argument`; the other options fill `command.options`.
+    argument?: SlashOption;
+    options?: SlashOption[];
+    admin?: AdminLevel;
 }
+
+const REFUSALS: Record<AdminLevel, string> = {
+    server: 'Only someone who can manage this server can use this command.',
+    bot: 'Only the bot admin can use this command.'
+};
 
 export interface RouteOptions {
     helpText?: string;
@@ -80,11 +92,21 @@ class MessageRouter {
         return this._routes.filter(route => route.discord);
     }
 
-    private _context(name: string, argument: string): CommandContext {
+    get slashCommands(): SlashCommand[] {
+        return this.discordRoutes.map(route => ({
+            name: route.command,
+            description: route.helpText ?? route.command,
+            options: [route.discord!.argument, ...(route.discord!.options ?? [])].filter(option => option !== undefined),
+            admin: route.discord!.admin !== undefined
+        }));
+    }
+
+    private _context(name: string, argument: string, options: Record<string, string> = {}): CommandContext {
         return {
             name,
             argument: argument.trim(),
-            argumentTokens: argument.split(/\s+/).filter(t => t.length > 0)
+            argumentTokens: argument.split(/\s+/).filter(t => t.length > 0),
+            options
         };
     }
 
@@ -139,16 +161,24 @@ class MessageRouter {
             return;
         }
         const argument: string = route.discord?.argument ? (interaction.options.getString(route.discord.argument.name) ?? '') : '';
+        const options: Record<string, string> = Object.fromEntries((route.discord?.options ?? [])
+            .map(option => [option.name, interaction.options.getString(option.name)])
+            .filter((entry): entry is [string, string] => entry[1] !== null));
         const cmd: Command = {
             platform: 'discord',
             chat_id: link.telegram_chat_id,
             user,
-            command: this._context(route.command, argument),
+            command: this._context(route.command, argument, options),
             reply,
             replyPrivately: reply,
             discord: { interaction, link }
         };
         cmd.reply = this._mirroredReply(cmd);
+        const admin: AdminLevel | undefined = route.discord?.admin;
+        if (admin && !(await new CommandPermissions(this._bot).isAdmin(cmd, admin))) {
+            await reply(REFUSALS[admin]);
+            return;
+        }
         try {
             await route.handler(this._bot, cmd);
         } catch (ex: any) {

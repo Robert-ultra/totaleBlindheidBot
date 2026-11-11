@@ -14,7 +14,7 @@ const run = async (argument: string): Promise<{ replies: unknown[]; saved: unkno
         platform: 'discord',
         chat_id: 1,
         user: { id: 7 },
-        command: { name: 'steam_user_id', argument, argumentTokens: argument.split(' ') },
+        command: { name: 'steam_user_id', argument, argumentTokens: argument.split(' '), options: {} },
         reply: async text => replies.push(text),
         replyPrivately: async () => undefined
     };

@@ -11,7 +11,7 @@ import RsvpDAO from './dao/RsvpDAO.js';
 import UserDAO from './dao/UserDAO.js';
 import SteamService from './SteamService.js';
 import GitHubService from './GitHubService.js';
-import DiscordService, { SlashCommand } from './discord/DiscordService.js';
+import DiscordService from './discord/DiscordService.js';
 import { toDiscordMarkdown } from './discord/markdown.js';
 import ChatLinkDAO, { ChatLink } from './dao/ChatLinkDAO.js';
 import { asFormatted, Part } from './format.js';
@@ -189,11 +189,7 @@ const registerAllDiscordCommands = async (): Promise<void> => {
     if (!discordService) {
         return;
     }
-    discordService.setSlashCommands(router.discordRoutes.map((route): SlashCommand => ({
-        name: route.command,
-        description: route.helpText ?? route.command,
-        argument: route.discord?.argument
-    })));
+    discordService.setSlashCommands(router.slashCommands);
     const guilds: string[] = [...new Set((await chatLinkDao.getAllLinks()).map(link => link.discord_guild_id))];
     await Promise.all(guilds.map(guild_id => discordService.registerCommands(guild_id)
         .catch((err: Error) => console.error(`Could not register slash commands in Discord server ${guild_id}:`, err))));
