@@ -2,12 +2,6 @@ import { GameHistoryEntry } from '../dao/GameHistoryDAO.js';
 import { bold, fmt, Formatted } from '../format.js';
 import { isCompetitive, Tally } from './Tally.js';
 
-// "a with b" as its two sides; an empty first side stands for the sender.
-export const splitDuo = (argument: string): [string, string] | null => {
-    const parts = argument.trim().split(/(?:^|\s+)with\s+/i);
-    return parts.length === 2 && parts[1] !== '' ? [parts[0], parts[1]] : null;
-};
-
 export class DuoStats {
     private constructor(private readonly together: Tally, private readonly overall: Tally) {}
 

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DuoStats, splitDuo } from '../stats/DuoStats.js';
+import { DuoStats } from '../stats/DuoStats.js';
 import { GameHistoryEntry } from '../dao/GameHistoryDAO.js';
 import { messageText } from '../format.js';
 
@@ -8,19 +8,6 @@ const game = (score: string, partners: number[] = [], mode = 'Competitive'): Gam
     chat_id: 1, user_id: 1, mode, map: 'Nuke', score,
     co_players: partners.map(tg_user_id => ({ tg_user_id, name: `P${tg_user_id}` })),
     ended_at: new Date('2026-01-01T12:00:00.000Z')
-});
-
-test('a duo argument splits on "with", case-insensitively', () => {
-    assert.deepEqual(splitDuo('Alice with Bob'), ['Alice', 'Bob']);
-    assert.deepEqual(splitDuo('alice WITH  @bob'), ['alice', '@bob']);
-    assert.deepEqual(splitDuo('with Bob'), ['', 'Bob']);
-});
-
-test('an argument without "with" between two names is not a duo', () => {
-    assert.equal(splitDuo('Alice'), null);
-    assert.equal(splitDuo('Without'), null);
-    assert.equal(splitDuo('a with b with c'), null);
-    assert.equal(splitDuo('Alice with'), null);
 });
 
 test('games together are compared with the overall competitive record', () => {
