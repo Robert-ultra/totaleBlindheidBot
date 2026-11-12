@@ -1214,7 +1214,6 @@ class SteamService {
         return 'offline';
     }
 
-    // The rich presence of the user's account in CS2; undefined when none of them is.
     async getRichPresence(tgUserId: number): Promise<RichPresence | undefined> {
         const settings = await this.userDao.getUserSettings(tgUserId);
         const playing: RichPresenceSource | undefined = (settings.steam_ids || [])

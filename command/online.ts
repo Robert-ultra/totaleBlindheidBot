@@ -18,7 +18,6 @@ interface OnlineUser {
 
 export const NOBODY_ONLINE = 'Nobody is on Steam right now.';
 
-// Who in a chat is in CS2 (with their game) and who is otherwise online on Steam.
 export class OnlineList {
     constructor(private readonly steam: OnlineSteam, private readonly users: OnlineUsers) {}
 
