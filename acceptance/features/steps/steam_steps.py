@@ -301,6 +301,22 @@ def step_chat_receives_new_steam_exact(context: Context, chat_id: int, expected:
     _wait_for_method(chat_id, "sendMessage", lambda text: text == expected, f"reading {expected!r}")
 
 
+@then('chat {chat_id:d} eventually receives a new Steam message reading')
+def step_chat_receives_new_steam_text(context: Context, chat_id: int) -> None:
+    _wait_for_exact(chat_id, "sendMessage", context.text)
+
+
+@then('the Steam message in chat {chat_id:d} is edited to read')
+def step_steam_message_edited_to_text(context: Context, chat_id: int) -> None:
+    _wait_for_exact(chat_id, "editMessageText", context.text)
+
+
+def _wait_for_exact(chat_id: int, method: str, expected: str) -> None:
+    def texts() -> List[str]:
+        return [m["text"] for m in helpers.get_outbox(chat_id) if m["method"] == method]
+    assert helpers.wait_until(lambda: expected in texts()), f"No {method} reading {expected!r} reached chat {chat_id}; got {texts()!r}"
+
+
 @then('the Steam Guard callback received code "{code}"')
 def step_steam_guard_callback(context: Context, code: str) -> None:
     helpers.wait_until(lambda: helpers.steam_guard_state().get("called"))

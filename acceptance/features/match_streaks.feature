@@ -14,7 +14,11 @@ Feature: Win and loss streaks in end-of-game messages
     When Steam mappings are refreshed
     And Steam reports user "76561198000002401" playing CS2 as "Kit" with score "13-7" on map "Inferno"
     And Steam reports user "76561198000002401" stopped playing
-    Then chat 2401 eventually receives a new Steam message containing "🔥 Kit: 3 wins in a row"
+    Then chat 2401 eventually receives a new Steam message reading
+      """
+      🏆 Kit won a game on Inferno (Competitive): 1️⃣3️⃣-7️⃣
+      🔥 Kit: 3 wins in a row
+      """
 
   Scenario: a loss streak skips other modes and stops at a tie
     Given a chat with id 2402
@@ -31,7 +35,11 @@ Feature: Win and loss streaks in end-of-game messages
     When Steam mappings are refreshed
     And Steam reports user "76561198000002402" playing CS2 as "Kit" with score "7-13" on map "Inferno"
     And Steam reports user "76561198000002402" stopped playing
-    Then chat 2402 eventually receives a new Steam message containing "💀 Kit: 4 losses in a row"
+    Then chat 2402 eventually receives a new Steam message reading
+      """
+      ☠️ Kit lost a game on Inferno (Competitive): 7️⃣-1️⃣3️⃣
+      💀 Kit: 4 losses in a row
+      """
 
   Scenario: a second win in a row is not mentioned
     Given a chat with id 2403
@@ -45,8 +53,10 @@ Feature: Win and loss streaks in end-of-game messages
     When Steam mappings are refreshed
     And Steam reports user "76561198000002403" playing CS2 as "Kit" with score "13-7" on map "Inferno"
     And Steam reports user "76561198000002403" stopped playing
-    Then chat 2403 eventually receives a new Steam message containing "won a game"
-    And chat 2403 has not received a Steam message containing "in a row"
+    Then chat 2403 eventually receives a new Steam message reading
+      """
+      🏆 Kit won a game on Inferno (Competitive): 1️⃣3️⃣-7️⃣
+      """
 
   Scenario: a grouped announcement keeps every player's streak when it is edited
     Given a chat with id 2404
@@ -66,6 +76,14 @@ Feature: Win and loss streaks in end-of-game messages
     And Steam reports user "76561198000002404" stopped playing
     And the matches of Steam user "76561198000002404" have been recorded
     And Steam reports user "76561198000002405" stopped playing
-    Then chat 2404 eventually receives a new Steam message containing "3 wins in a row"
-    And the Steam message in chat 2404 is edited to contain "🔥 Alpha: 3 wins in a row"
-    And the Steam message in chat 2404 is edited to contain "🔥 Bravo: 3 wins in a row"
+    Then chat 2404 eventually receives a new Steam message reading
+      """
+      🏆 Alpha won a game on Vertigo (Competitive): 1️⃣3️⃣-7️⃣
+      🔥 Alpha: 3 wins in a row
+      """
+    And the Steam message in chat 2404 is edited to read
+      """
+      🏆 Bravo and Alpha won a game on Vertigo (Competitive): 1️⃣3️⃣-7️⃣
+      🔥 Bravo: 3 wins in a row
+      🔥 Alpha: 3 wins in a row
+      """
