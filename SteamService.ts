@@ -10,6 +10,7 @@ import RollcallPlayerDAO from './dao/RollcallPlayerDAO.js';
 import { bold, fmt, Formatted, sameFormatted } from './format.js';
 import { deleteMirrored, editMirrored, sendMirrored } from './messenger.js';
 import { parseMention } from './mention.js';
+import Streak from './stats/Streak.js';
 import { saveSteamFile, readSteamFile, withTransaction } from './dao/Database.js';
 import {
     segmentStream, findCoPlayers, deriveRounds, continuesMatch, parseRawScore as parseRawScoreFn,
@@ -68,6 +69,12 @@ const DERIVATION_CONFIG: DerivationConfig = {
     resetConfirmMs: MATCH_RESET_CONFIRM_MS,
     coPlayerStaleMs: CO_PLAYER_STALE_MS
 };
+
+interface AnnouncedOwner {
+    userId: number;
+    historyId: number;
+    name: string;
+}
 
 interface GameUpdateInfo {
     gameId?: string | number;
@@ -823,7 +830,8 @@ class SteamService {
             [sibling.user_id, sibling.player_name || String(sibling.user_id)] as [number, string]
         ]));
         names.delete(match.user_id);
-        await editMirrored(this.bot, match.chat_id, match.message_id, this.endOfGameText([...names.values()], result, match.map, match.mode, announced[0].score));
+        const streaks = await this.streakLines(match.chat_id, match.mode, announced.map(sibling => this.announcedOwner(sibling)));
+        await editMirrored(this.bot, match.chat_id, match.message_id, this.endOfGameText([...names.values()], result, match.map, match.mode, announced[0].score, streaks));
     }
 
     // Replay the stream's unfinalised events and finalise every segment the derivation considers
@@ -988,7 +996,25 @@ class SteamService {
         return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
     }
 
-    private endOfGameText(names: string[], result: 'win' | 'loss' | 'tie', map?: string, mode?: string, score?: string): Formatted {
+    private announcedOwner(sibling: SiblingMatch): AnnouncedOwner {
+        return { userId: sibling.user_id, historyId: sibling.id, name: sibling.player_name || String(sibling.user_id) };
+    }
+
+    // Each owner's run as of their row in this match, so an edited announcement shows the same runs.
+    private async streakLines(chatId: number, mode: string | undefined, owners: AnnouncedOwner[]): Promise<string[]> {
+        if (!Streak.counts(mode)) {
+            return [];
+        }
+        const streaks = await Promise.all(owners.map(async owner => {
+            const history = await this.gameHistoryDao.getGameHistory(chatId, owner.userId);
+            return { owner, streak: Streak.current(history.filter(entry => entry.id! <= owner.historyId)) };
+        }));
+        return streaks
+            .filter(({ streak }) => streak?.isNotable())
+            .map(({ owner, streak }) => streak!.describe(owner.name));
+    }
+
+    private endOfGameText(names: string[], result: 'win' | 'loss' | 'tie', map?: string, mode?: string, score?: string, streaks: string[] = []): Formatted {
         const emoji = result === 'win' ? '🏆' : result === 'loss' ? '☠️' : '🤝';
         const verb = result === 'win' ? 'won' : result === 'loss' ? 'lost' : 'tied';
         let details = '';
@@ -1001,7 +1027,8 @@ class SteamService {
         if (score) {
             details += `: ${this.formatScore(score)}`;
         }
-        return fmt`${emoji} ${bold(this.formatNameList(names))} ${verb} a game${details}`;
+        const streakText = streaks.map(line => `\n${line}`).join('');
+        return fmt`${emoji} ${bold(this.formatNameList(names))} ${verb} a game${details}${streakText}`;
     }
 
     // Announce a finished match as a single per-match message that names every participating
@@ -1085,7 +1112,12 @@ class SteamService {
             }
         }
         const names = Array.from(namesByUser.values());
-        const text = this.endOfGameText(names, result, match.map, match.mode, match.score);
+        const owners: AnnouncedOwner[] = [
+            { userId: match.user_id, historyId, name: playerName },
+            ...(target?.rows || []).map(row => this.announcedOwner(row))
+        ];
+        const streaks = await this.streakLines(chatId, match.mode, owners);
+        const text = this.endOfGameText(names, result, match.map, match.mode, match.score, streaks);
 
         if (target) {
             try {
