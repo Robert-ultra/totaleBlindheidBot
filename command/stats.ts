@@ -4,9 +4,8 @@ import GameHistoryDAO, { GameHistoryEntry } from '../dao/GameHistoryDAO.js';
 import { formatError } from '../utils.js';
 import { bold, fmt, Formatted, join } from '../format.js';
 import { GameResult, parseScore, scoreResult } from './game_history.js';
-import { matchPlayerArgument, mismatchReply, resolvePlayerTarget } from './playerArg.js';
-import { DuoStats, splitDuo } from '../stats/DuoStats.js';
-import { userDisplayName } from '../dao/UserDAO.js';
+import { matchCommandPlayer, matchPlayerPairs, MatchedPlayer, PlayerTarget, targetOrReply } from './playerArg.js';
+import { DuoStats } from '../stats/DuoStats.js';
 
 const dao = new GameHistoryDAO();
 
@@ -187,40 +186,33 @@ export const renderStats = (entries: GameHistoryEntry[]): Formatted | null => {
     return join(blocks, '\n\n');
 };
 
-const duoStats = async (msg: Command, sides: [string, string]): Promise<unknown> => {
-    const players = await dao.getChatPlayers(msg.chat_id);
-    const matches = sides.map(side => matchPlayerArgument(players, side));
-    const mismatch = matches.map(mismatchReply).find(Boolean);
-    if (mismatch) {
-        return msg.reply(mismatch);
-    }
-    const sender = { user_id: msg.user.id, name: players.find(p => p.user_id === msg.user.id)?.name ?? userDisplayName(msg.user) };
-    const [player, partner] = matches.map(match => match.kind === 'player' ? match : sender);
+const duoStats = async (msg: Command, [player, partner]: [MatchedPlayer, MatchedPlayer]): Promise<unknown> => {
     const entries = await dao.getGameHistory(msg.chat_id, player.user_id);
     return msg.reply(DuoStats.of(entries, partner.user_id).render(player.name, partner.name));
 };
 
-const playerStats = (msg: Command): Promise<unknown> =>
-    resolvePlayerTarget(dao, msg)
-        .then(target => {
-            if (!target) {
-                return;  // resolvePlayerTarget already replied with the reason.
-            }
-            return dao.getGameHistory(msg.chat_id, target.user_id)
-                .then((entries: GameHistoryEntry[]) => {
-                    const text = renderStats(entries);
-                    if (!text) {
-                        return msg.reply(target.name
-                            ? `No competitive games for ${target.name} in this chat yet.`
-                            : 'No competitive games in your history yet.');
-                    }
-                    const header = target.name ? fmt`Competitive stats for ${bold(target.name)}\n` : '';
-                    return msg.reply(fmt`${header}${text}`);
-                });
-        });
-
-export default (bot: Bot, msg: Command): Promise<unknown> => {
-    const sides = splitDuo(msg.command?.argument ?? '');
-    return (sides ? duoStats(msg, sides) : playerStats(msg))
-        .catch((err: Error) => msg.reply(formatError(err)));
+const playerStats = async (msg: Command, target: PlayerTarget): Promise<unknown> => {
+    const text = renderStats(await dao.getGameHistory(msg.chat_id, target.user_id));
+    if (!text) {
+        return msg.reply(target.name
+            ? `No competitive games for ${target.name} in this chat yet.`
+            : 'No competitive games in your history yet.');
+    }
+    const header = target.name ? fmt`Competitive stats for ${bold(target.name)}\n` : '';
+    return msg.reply(fmt`${header}${text}`);
 };
+
+const stats = async (msg: Command): Promise<unknown> => {
+    const { match, players } = await matchCommandPlayer(dao, msg);
+    const argument = msg.command?.argument?.trim() ?? '';
+    const pairs = match.kind === 'none' ? matchPlayerPairs(players, argument) : [];
+    if (pairs.length === 1) {
+        return duoStats(msg, pairs[0]);
+    }
+    const names = pairs.map(([player, partner]) => `${player.name} and ${partner.name}`);
+    const target = await targetOrReply(msg, pairs.length > 1 ? { kind: 'ambiguous', needle: argument, names } : match);
+    return target && playerStats(msg, target);
+};
+
+export default (bot: Bot, msg: Command): Promise<unknown> =>
+    stats(msg).catch((err: Error) => msg.reply(formatError(err)));
